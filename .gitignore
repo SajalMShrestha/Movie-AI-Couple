@@ -1,0 +1,29 @@
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+.venv/
+env/
+venv/
+venv311/
+
+# Streamlit
+.streamlit/secrets.toml
+session_state.json
+
+# Logs and outputs
+*.log
+*.csv
+*.tsv
+
+# VS Code
+.vscode/
+
+# Credentials
+firebase-service-account.json
+firebase-adminsdk.json
+
+# MacOS metadata files (optional, but good hygiene)
+.DS_Store
