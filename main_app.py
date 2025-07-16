@@ -1,388 +1,326 @@
 """
-Main Streamlit application for movie recommendations.
+Couples Movie Recommendation App - Main UI and Orchestration
+Streamlit interface that orchestrates the recommendation system
 """
 
 import streamlit as st
-import uuid
-from tmdbv3api import TMDb, Movie
+import sys
+import os
 
-# Import our modular components
-from src.movie_search import enhanced_movie_search
-from src.movie_scoring import recommend_movies
-from src.feedback_system import (
-    initialize_feedback_csv, get_or_create_numeric_session_id,
-    record_feedback_to_sheet, record_final_comments_to_sheet
-)
+# =============================================================================
+# COUPLE CONFIGURATION - EDIT THIS SECTION FOR EACH COUPLE
+# =============================================================================
 
-# Page configuration
-st.set_page_config(
-    page_title="Screen or Skip",
-    page_icon="🎬"
-)
+PERSON1_NAME = "Your"
+PERSON1_MOVIES = [
+    "The Bourne Identity",
+    "Knocked Up", 
+    "Manchester by the Sea",
+    "Miami Vice",
+    "Gone Girl"
+]
 
-# Initialize TMDb
-tmdb = TMDb()
-tmdb.api_key = st.secrets["TMDB_API_KEY"]
-tmdb.language = 'en'
-tmdb.debug = True
+PERSON2_NAME = "Sneha's"
+PERSON2_MOVIES = [
+    "How to Train Your Dragon",
+    "3 Idiots",
+    "Good Boys", 
+    "The Lion King",
+    "A Cinderella Story"
+]
 
-# Initialize session state variables
-def initialize_session_state():
-    """Initialize all required session state variables."""
-    session_vars = {
-        "favorite_movies": [],
-        "selected_movie": None,
-        "recommendations": None,
-        "candidates": None,
-        "recommend_triggered": False,
-        "favorite_movie_posters": {},
-        "movie_details_cache": {},
-        "movie_credits_cache": {},
-        "fetch_cache": {},
-        "recommendation_cache": {},
-        "session_id": str(uuid.uuid4()),
-        "search_done": False,
-        "previous_query": ""
-    }
+# =============================================================================
+# IMPORTS AND SETUP
+# =============================================================================
+
+# Add src directory to path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.join(current_dir, 'src')
+
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
+# Import modules with error handling
+try:
+    from src.couple_scoring import recommend_movies_for_couple
+    couple_scoring_available = True
+except ImportError as e:
+    st.error(f"❌ Could not import couple_scoring: {e}")
+    st.error("Make sure src/couple_scoring.py exists")
+    couple_scoring_available = False
+
+try:
+    from src.feedback_system import (
+        get_or_create_numeric_session_id,
+        record_feedback_to_sheet,
+        record_final_comments_to_sheet
+    )
+    feedback_available = True
+except ImportError as e:
+    st.warning(f"⚠️ Could not import feedback_system: {e}")
+    st.warning("Feedback features will be disabled")
+    feedback_available = False
     
-    for var, default_value in session_vars.items():
-        if var not in st.session_state:
-            st.session_state[var] = default_value
+    # Create dummy functions
+    def get_or_create_numeric_session_id():
+        return 1, "dummy-session"
+    def record_feedback_to_sheet(*args, **kwargs):
+        return False
+    def record_final_comments_to_sheet(*args, **kwargs):
+        return False
 
-# Initialize everything
-initialize_session_state()
-initialize_feedback_csv()
-numeric_id, session_uuid = get_or_create_numeric_session_id()
-st.session_state.numeric_session_id = numeric_id
+# =============================================================================
+# SESSION STATE MANAGEMENT
+# =============================================================================
+
+def initialize_couples_session_state():
+    """Initialize all required session state variables."""
+    
+    # Couples-specific state
+    if "couple_recommendations" not in st.session_state:
+        st.session_state.couple_recommendations = []
+    
+    if "couple_feedback_given" not in st.session_state:
+        st.session_state.couple_feedback_given = {}
+    
+    if "show_couple_feedback" not in st.session_state:
+        st.session_state.show_couple_feedback = False
+    
+    if "couple_cache" not in st.session_state:
+        st.session_state.couple_cache = {}
+    
+    # Shared cache from existing system
+    if "fetch_cache" not in st.session_state:
+        st.session_state.fetch_cache = {}
+    
+    if "movie_details_cache" not in st.session_state:
+        st.session_state.movie_details_cache = {}
+    
+    if "movie_credits_cache" not in st.session_state:
+        st.session_state.movie_credits_cache = {}
+    
+    if "recommendation_cache" not in st.session_state:
+        st.session_state.recommendation_cache = {}
+    
+    # Session ID for feedback
+    if "session_id" not in st.session_state:
+        import uuid
+        st.session_state.session_id = str(uuid.uuid4())
+
+# =============================================================================
+# UI COMPONENTS
+# =============================================================================
+
+def display_favorite_movies():
+    """Display both partners' favorite movies at the top."""
+    st.title("🎬 Couples Movie Matcher")
+    st.markdown("*Find movies you'll both love using K-Means Taste Fusion*")
+    st.markdown("---")
+    
+    # Create two columns for the couples' favorites
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader(f"🎯 {PERSON1_NAME} Favorites")
+        for i, movie in enumerate(PERSON1_MOVIES, 1):
+            st.write(f"{i}. **{movie}**")
+    
+    with col2:
+        st.subheader(f"💕 {PERSON2_NAME} Favorites")
+        for i, movie in enumerate(PERSON2_MOVIES, 1):
+            st.write(f"{i}. **{movie}**")
+    
+    return PERSON1_MOVIES, PERSON2_MOVIES
+
+def display_couple_recommendations(recommendations):
+    """Display the couple recommendations with feedback options."""
+    st.markdown("---")
+    st.subheader("🎭 Movies You Both May Enjoy Together")
+    
+    # Show algorithm info
+    with st.expander("🧠 How This Works", expanded=False):
+        st.write("""
+        **Taste Cluster Fusion via K-Means:**
+        1. 🎬 Analyzes both your movie preferences using plot embeddings
+        2. 🧠 Finds taste clusters using K-Means clustering  
+        3. 🎯 Identifies overlapping preferences or bridges between different tastes
+        4. ✨ Recommends movies that appeal to your fused taste profile
+        
+        **Three Fusion Strategies:**
+        - **Overlap Centers**: When you have similar tastes
+        - **Bridge Clusters**: When you have different but compatible tastes  
+        - **Simple Average**: Balanced approach for all taste combinations
+        """)
+    
+    if not recommendations:
+        st.warning("No recommendations generated yet. Click 'Generate Recommendations' above!")
+        return
+    
+    for i, (title, score, explanation) in enumerate(recommendations, 1):
+        with st.expander(f"#{i} {title} (Score: {score:.3f})", expanded=i <= 3):
+            st.write(f"**🎯 Why this movie:** {explanation}")
+            
+            # Feedback section
+            feedback_key = f"couple_rec_{i}"
+            
+            if feedback_available and feedback_key not in st.session_state.couple_feedback_given:
+                st.write("**Would you both watch this movie together?**")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    if st.button("👍 Yes!", key=f"yes_{feedback_key}"):
+                        record_couple_feedback(i, title, score, explanation, "Yes", "N/A")
+                        st.session_state.couple_feedback_given[feedback_key] = "Yes"
+                        st.success("Thanks for the feedback!")
+                        st.rerun()
+                
+                with col2:
+                    if st.button("👎 No", key=f"no_{feedback_key}"):
+                        record_couple_feedback(i, title, score, explanation, "No", "N/A")
+                        st.session_state.couple_feedback_given[feedback_key] = "No"
+                        st.success("Thanks for the feedback!")
+                        st.rerun()
+                
+                with col3:
+                    if st.button("🤔 Maybe", key=f"maybe_{feedback_key}"):
+                        record_couple_feedback(i, title, score, explanation, "Maybe", "N/A")
+                        st.session_state.couple_feedback_given[feedback_key] = "Maybe"
+                        st.success("Thanks for the feedback!")
+                        st.rerun()
+            elif feedback_available:
+                feedback = st.session_state.couple_feedback_given[feedback_key]
+                st.success(f"✅ You both said: **{feedback}**")
+
+# =============================================================================
+# FEEDBACK FUNCTIONS
+# =============================================================================
+
+def record_couple_feedback(rank, title, score, explanation, would_watch, liked_if_seen):
+    """Record feedback for couple recommendations."""
+    try:
+        numeric_id, session_id = get_or_create_numeric_session_id()
+        
+        combined_favorites = f"Person1: {', '.join(PERSON1_MOVIES)} | Person2: {', '.join(PERSON2_MOVIES)}"
+        
+        success = record_feedback_to_sheet(
+            numeric_session_id=numeric_id,
+            uuid_session_id=session_id,
+            user_top_5_movies=combined_favorites,
+            user_taste_profile="couple_fusion",
+            user_favorite_genres="mixed_couple_preferences",
+            recommendation_rank=rank,
+            movie_id="COUPLE_REC",
+            movie_title=title,
+            movie_genres="various",
+            movie_year="N/A",
+            recommendation_score=score,
+            recommendation_reason=explanation,
+            would_watch=would_watch,
+            liked_if_seen=liked_if_seen
+        )
+        
+        if not success:
+            st.warning("Could not save to Google Sheets, but feedback recorded locally.")
+            
+    except Exception as e:
+        st.error(f"Error recording feedback: {e}")
+
+def generate_couple_recommendations(person1_movies, person2_movies):
+    """Generate recommendations for the couple using K-Means clustering."""
+    if not couple_scoring_available:
+        st.error("Couple scoring module not available. Cannot generate recommendations.")
+        return []
+    
+    # Check cache first
+    cache_key = f"couple_recs_{hash(tuple(person1_movies + person2_movies))}"
+    if cache_key in st.session_state.couple_cache:
+        return st.session_state.couple_cache[cache_key]
+    
+    with st.spinner("🎯 Analyzing both your tastes and finding perfect matches..."):
+        try:
+            # Call the recommendation function from couple_scoring module
+            recommendations = recommend_movies_for_couple(person1_movies, person2_movies)
+            
+            # Cache the results
+            st.session_state.couple_cache[cache_key] = recommendations
+            
+            return recommendations
+            
+        except Exception as e:
+            st.error(f"Error generating recommendations: {e}")
+            st.error(f"Error details: {str(e)}")
+            import traceback
+            st.error(f"Traceback: {traceback.format_exc()}")
+            return []
+
+# =============================================================================
+# MAIN APPLICATION
+# =============================================================================
 
 def main():
     """Main application function."""
-    st.title("🎬 Screen or Skip")
-    
-    # Movie search section
-    search_query = st.text_input(
-        "Search (Add your 5 favorite movies to get personalized recommendations!)", 
-        key="movie_search"
+    st.set_page_config(
+        page_title="Couples Movie Matcher",
+        page_icon="🎬",
+        layout="wide"
     )
-
-    # Reset search_done when user types a different movie
-    if search_query != st.session_state["previous_query"]:
-        st.session_state["search_done"] = False
-        st.session_state["previous_query"] = search_query
-
-    search_results = []
-
-    # Only search if user hasn't just added a movie
-    if search_query and len(search_query) >= 2 and not st.session_state["search_done"]:
-        try:
-            url = "https://api.themoviedb.org/3/search/movie"
-            params = {"api_key": st.secrets["TMDB_API_KEY"], "query": search_query}
-            response = requests.get(url, params=params)
-            data = response.json()
-            results = data.get("results", [])
-            search_results = [
-                {
-                    "label": f"{m.get('title')} ({m.get('release_date')[:4]})" if m.get("release_date") else m.get('title'),
-                    "id": m.get("id"),
-                    "poster_path": m.get("poster_path")
-                }
-                for m in results[:5]
-                if m.get("title") and m.get("id")
-            ]
-        except Exception as e:
-            st.error(f"Error searching for movies: {e}")
-
-    # Show Top 5 matches
-    if search_results:
-        st.markdown("### Top 5 Matches")
-        cols = st.columns(5)
-        for idx, movie in enumerate(search_results):
-            with cols[idx]:
-                poster_url = f"https://image.tmdb.org/t/p/w200{movie['poster_path']}" if movie.get("poster_path") else None
-                if poster_url:
-                    st.image(poster_url, use_column_width=True)
-                st.write(f"**{movie['label']}**")
-                if st.button("Add Movie", key=f"add_{idx}"):
-                    clean_title = movie["label"].split(" (", 1)[0]
-                    movie_id = movie["id"]
-
-                    existing_titles = [m["title"] for m in st.session_state.favorite_movies if isinstance(m, dict)]
-                    if len(st.session_state.favorite_movies) >= 5:
-                        st.warning("You can only add up to 5 movies.")
-                    elif clean_title not in existing_titles:
-                        st.session_state.favorite_movies.append({
-                            "title": clean_title,
-                            "year": movie["label"].split("(", 1)[1].replace(")", "") if "(" in movie["label"] else "",
-                            "poster_path": movie.get("poster_path", ""),
-                            "id": movie_id
-                        })
-                        st.session_state["search_done"] = True
-                        st.session_state["previous_query"] = ""
-                        st.session_state["movie_search"] = ""
-                        st.success(f"✅ Added {clean_title}")
-                        st.rerun()
-
-    # Show selected movies section
-    if st.session_state.favorite_movies:
-        st.subheader("🎥 Your Selected Movies (5 max)")
+    
+    initialize_couples_session_state()
+    
+    # Debug info (expandable)
+    with st.expander("🔧 Debug Info", expanded=False):
+        st.write(f"Current directory: {os.getcwd()}")
+        st.write(f"Script directory: {os.path.dirname(os.path.abspath(__file__))}")
+        st.write(f"Python path includes: {src_dir}")
+        st.write(f"Feedback available: {feedback_available}")
+        st.write(f"Couple scoring available: {couple_scoring_available}")
+    
+    # Display favorite movies
+    person1_movies, person2_movies = display_favorite_movies()
+    
+    # Generate recommendations button
+    st.markdown("---")
+    if st.button("🎯 Generate Couple Recommendations", type="primary"):
+        recommendations = generate_couple_recommendations(person1_movies, person2_movies)
+        st.session_state.couple_recommendations = recommendations
+        st.session_state.show_couple_feedback = True
+    
+    # Display recommendations if available
+    if st.session_state.couple_recommendations and st.session_state.show_couple_feedback:
+        display_couple_recommendations(st.session_state.couple_recommendations)
+    
+    # Final feedback section
+    if st.session_state.couple_recommendations and feedback_available:
+        st.markdown("---")
+        st.subheader("💬 Overall Feedback")
         
-        cols = st.columns(5)
-        for i, movie in enumerate(st.session_state.favorite_movies):
-            with cols[i % 5]:
-                title = movie["title"]
-                year = movie.get("year", "")
-                poster = movie.get("poster_path")
+        final_comments = st.text_area(
+            "Any thoughts on these recommendations? What worked well or didn't?",
+            placeholder="These recommendations were great because... / I wish there were more...",
+            height=100
+        )
+        
+        if st.button("Submit Final Feedback"):
+            if final_comments.strip():
+                numeric_id, session_id = get_or_create_numeric_session_id()
+                combined_favorites = f"Person1: {', '.join(PERSON1_MOVIES)} | Person2: {', '.join(PERSON2_MOVIES)}"
                 
-                if poster:
-                    poster_url = f"https://image.tmdb.org/t/p/w200{poster}"
-                    st.image(poster_url, use_column_width=True)
-                else:
-                    st.write("🎬 No poster")
-                
-                st.write(f"**{title}**")
-                if year:
-                    st.write(f"({year})")
-                
-                if st.button(f"Remove", key=f"remove_{i}"):
-                    st.session_state.favorite_movies.pop(i)
-                    st.rerun()
-
-        # Control buttons
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("❌ Clear All"):
-                st.session_state.favorite_movies = []
-                st.session_state.recommendations = None
-                st.session_state.candidates = None
-                st.session_state.recommend_triggered = False
-                st.rerun()
-
-        with col2:
-            if st.button("🎬 Get Recommendations", type="primary"):
-                if len(st.session_state.favorite_movies) != 5:
-                    st.warning("Please select exactly 5 movies to get recommendations.")
-                else:
-                    with st.spinner("Finding personalized movie recommendations..."):
-                        favorite_titles = [m["title"] for m in st.session_state.favorite_movies if isinstance(m, dict)]
-                        try:
-                            recs, candidate_movies = recommend_movies(favorite_titles)
-                            st.session_state.recommendations = recs
-                            st.session_state.candidates = candidate_movies
-                            st.session_state.recommend_triggered = True
-                        except Exception as e:
-                            st.error(f"❌ Failed to generate recommendations: {e}")
-                            import traceback
-                            st.error(traceback.format_exc())
-
-    # Display recommendations and feedback
-    if st.session_state.recommend_triggered:
-        if not st.session_state.recommendations:
-            st.warning("⚠️ No recommendations could be generated. Please try different favorite movies.")
-            st.info("Tip: Make sure your selected movies have plot summaries and at least some popularity.")
-        else:
-            st.subheader("🌟 Your Top 10 Movie Recommendations")
-
-            # Collect feedback for all movies
-            user_feedback = {}
-
-            for idx, (title, score) in enumerate(st.session_state.recommendations, 1):
-                # Find the movie object from candidates
-                movie_obj = None
-                for m, _ in st.session_state.candidates.values():
-                    if m and getattr(m, 'title', '') == title:
-                        movie_obj = m
-                        break
-                
-                if movie_obj is None:
-                    continue
-                
-                st.markdown(f"### {idx}. {movie_obj.title}")
-                
-                # Create columns for poster and details
-                col1, col2 = st.columns([1, 3])
-                
-                with col1:
-                    if movie_obj.poster_path:
-                        st.image(f"https://image.tmdb.org/t/p/w300{movie_obj.poster_path}", width=150)
-                    else:
-                        st.write("🎬 No poster")
-                
-                with col2:
-                    # Show year
-                    release_year = "N/A"
-                    try:
-                        if hasattr(movie_obj, 'release_date') and movie_obj.release_date:
-                            release_year = movie_obj.release_date[:4]
-                    except:
-                        pass
-                    st.write(f"**Year:** {release_year}")
-                    
-                    # Show plot
-                    overview = getattr(movie_obj, 'overview', None) or getattr(movie_obj, 'plot', None) or "No description available."
-                    st.write(f"**Plot:** {overview}")
-
-                # Feedback section
-                fb_key = f"watch_{idx}"
-                liked_key = f"liked_{idx}"
-
-                response = st.radio(
-                    "Would you watch this?", 
-                    ["Yes", "No", "Already watched"], 
-                    key=fb_key, 
-                    index=None,
-                    horizontal=True
+                success = record_final_comments_to_sheet(
+                    numeric_session_id=numeric_id,
+                    uuid_session_id=session_id,
+                    user_top_5_movies=combined_favorites,
+                    user_taste_profile="couple_fusion",
+                    user_favorite_genres="mixed_couple_preferences",
+                    final_comments=final_comments
                 )
-
-                liked = None
-                if response == "Already watched":
-                    liked = st.radio(
-                        "Did you like it?", 
-                        ["Yes", "No"], 
-                        key=liked_key, 
-                        index=None,
-                        horizontal=True
-                    )
-
-                # Capture movie metadata
-                movie_genres = []
-                genres_list = getattr(movie_obj, 'genres', [])
-                for g in genres_list:
-                    if isinstance(g, dict):
-                        name = g.get('name', '')
-                    else:
-                        name = getattr(g, 'name', '')
-                    if name:
-                        movie_genres.append(name)
                 
-                user_feedback[idx] = {
-                    "movie": movie_obj.title,
-                    "movie_id": movie_obj.id,
-                    "movie_genres": " | ".join(movie_genres),
-                    "movie_year": release_year,
-                    "recommendation_rank": idx,
-                    "recommendation_score": score,
-                    "response": response,
-                    "liked": liked,
-                }
-                
-                st.markdown("---")
-
-            # Final Comments Section
-            st.markdown("---")
-            st.subheader("💬 Final Comments")
-            st.write("Share any additional thoughts about the recommendations!")
-
-            final_comments = st.text_area(
-                "Your feedback helps me improve the recommendation system:",
-                placeholder="Did the recommendations match your taste? Any movies you were surprised to see?",
-                height=100,
-                key="final_comments_text"
-            )
-
-            if final_comments:
-                char_count = len(final_comments)
-                st.caption(f"Characters: {char_count}")
-
-            # Email input
-            st.markdown("---")
-            st.subheader("📧 Email")
-            save_email = st.text_input(
-                "Enter your email to save your recommendations:",
-                placeholder="your.email@example.com",
-                key="save_profile_email"
-            )
-
-            # Submit all responses
-            if st.button("Submit All Responses", type="primary"):
-                success_count = 0
-                total_responses = 0
-                
-                # Get user profile data
-                user_top_5 = " | ".join([m["title"] for m in st.session_state.favorite_movies])
-                
-                # Extract genres from user's selected movies
-                favorite_genres = set()
-                for movie in st.session_state.favorite_movies:
-                    try:
-                        movie_id = movie.get("id")
-                        if movie_id and movie_id in st.session_state.movie_details_cache:
-                            details = st.session_state.movie_details_cache[movie_id]
-                            genres_list = getattr(details, 'genres', [])
-                            for g in genres_list:
-                                if isinstance(g, dict):
-                                    name = g.get('name', '')
-                                else:
-                                    name = getattr(g, 'name', '')
-                                if name:
-                                    favorite_genres.add(name)
-                    except Exception as e:
-                        st.warning(f"Error processing movie: {e}")
-                        continue
-                
-                user_favorite_genres = " | ".join(list(favorite_genres)[:5])
-                user_taste_profile = "diverse"  # Default
-                
-                # Process movie feedback responses
-                for index, feedback in user_feedback.items():
-                    if feedback["response"]:  # Only save if user provided a response
-                        total_responses += 1
-                        
-                        recommendation_reason = f"Genre match: {feedback['movie_genres']}" if feedback['movie_genres'] else "Algorithm recommendation"
-                        
-                        if record_feedback_to_sheet(
-                            numeric_session_id=st.session_state.numeric_session_id,
-                            uuid_session_id=st.session_state.session_id,
-                            user_top_5_movies=user_top_5,
-                            user_taste_profile=user_taste_profile,
-                            user_favorite_genres=user_favorite_genres,
-                            recommendation_rank=feedback["recommendation_rank"],
-                            movie_id=feedback["movie_id"],
-                            movie_title=feedback["movie"],
-                            movie_genres=feedback["movie_genres"],
-                            movie_year=feedback["movie_year"],
-                            recommendation_score=feedback["recommendation_score"],
-                            recommendation_reason=recommendation_reason,
-                            would_watch=feedback["response"],
-                            liked_if_seen=feedback["liked"] or "",
-                            user_email=save_email.strip() if save_email else ""
-                        ):
-                            success_count += 1
-                
-                # Save final comments if provided
-                comments_saved = False
-                if final_comments and final_comments.strip():
-                    comments_saved = record_final_comments_to_sheet(
-                        numeric_session_id=st.session_state.numeric_session_id,
-                        uuid_session_id=st.session_state.session_id,
-                        user_top_5_movies=user_top_5,
-                        user_taste_profile=user_taste_profile,
-                        user_favorite_genres=user_favorite_genres,
-                        final_comments=final_comments.strip(),
-                        user_email=save_email.strip() if save_email else ""
-                    )
-                
-                # Show results
-                if success_count == total_responses and total_responses > 0:
-                    if comments_saved or not final_comments.strip():
-                        st.success(f"✅ All {success_count} movie responses saved successfully!")
-                        if comments_saved:
-                            st.success("✅ Your final comments were also saved!")
-                        st.balloons()
-                    else:
-                        st.success(f"✅ All {success_count} movie responses saved!")
-                        st.warning("⚠️ Final comments failed to save, but movie feedback was recorded.")
-                elif success_count > 0:
-                    st.warning(f"⚠️ {success_count}/{total_responses} movie responses saved. Some failed to save.")
-                    if comments_saved:
-                        st.success("✅ Your final comments were saved!")
+                if success:
+                    st.success("Thanks for your feedback! This will help improve our couple recommendations.")
                 else:
-                    if total_responses == 0:
-                        st.warning("⚠️ Please provide at least one movie response before submitting.")
-                    else:
-                        st.error("❌ Failed to save any movie responses. Please check your Google Sheets setup.")
-                        if comments_saved:
-                            st.success("✅ Your final comments were saved!")
+                    st.warning("Feedback saved locally (couldn't reach Google Sheets)")
+            else:
+                st.warning("Please enter some feedback before submitting.")
 
 if __name__ == "__main__":
-    import requests  # Add missing import
     main()

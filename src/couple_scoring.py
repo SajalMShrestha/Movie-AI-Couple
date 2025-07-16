@@ -1,54 +1,25 @@
 """
-Couples Movie Recommendation Scoring - K-Means Clustering Implementation
-Complete algorithm for taste fusion and couple compatibility scoring
+Couples Movie Recommendation Scoring Module
+K-Means clustering and taste fusion algorithms
 """
 
 import streamlit as st
 import numpy as np
 import torch
 from sklearn.cluster import KMeans
-from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine_similarity
 from sentence_transformers.util import cos_sim
 from collections import Counter
 import concurrent.futures
-import sys
-import os
 
-# Add src directory to path for imports
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-src_dir = os.path.join(parent_dir, 'src')
-
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
-
-# Import from src directory with error handling
-try:
-    from movie_scoring import (
-        build_enhanced_candidate_pool, 
-        fetch_similar_movie_details,
-        compute_score,
-        analyze_taste_diversity
-    )
-    from utils import (
-        get_embedding_model,
-        get_trending_popularity,
-        estimate_user_age,
-        calculate_user_mood_preferences,
-        RECOMMENDATION_WEIGHTS
-    )
-    from narrative_analysis import infer_narrative_style, infer_mood_from_plot
-    from movie_search import fuzzy_search_movies
-    from franchise_detection import apply_final_franchise_limit
-    from tmdbv3api import Movie, TMDb
-except ImportError as e:
-    st.error(f"❌ Import error in couple_movie_scoring: {e}")
-    st.error(f"Make sure all required modules exist in src/ directory")
-    st.stop()
-
-# =============================================================================
-# FEATURE EXTRACTION
-# =============================================================================
+# Import other modules from src
+from movie_scoring import (
+    build_enhanced_candidate_pool, 
+    fetch_similar_movie_details
+)
+from utils import get_embedding_model
+from narrative_analysis import infer_narrative_style
+from movie_search import fuzzy_search_movies
+from tmdbv3api import Movie, TMDb
 
 def extract_movie_features(movie_titles):
     """
@@ -199,10 +170,6 @@ def extract_movie_features(movie_titles):
     st.write(f"   ✅ Successfully processed {len(features['movies_info'])} movies")
     return features
 
-# =============================================================================
-# K-MEANS CLUSTERING
-# =============================================================================
-
 def perform_taste_clustering(person1_features, person2_features):
     """
     Perform K-Means clustering to find taste intersections.
@@ -299,10 +266,6 @@ def perform_taste_clustering(person1_features, person2_features):
     
     return clustering_results
 
-# =============================================================================
-# COMPATIBILITY SCORING
-# =============================================================================
-
 def compute_couple_compatibility_score(candidate_embedding, fusion_embeddings, fusion_strategy):
     """
     Compute how well a candidate movie matches the couple's fused taste.
@@ -319,11 +282,9 @@ def compute_couple_compatibility_score(candidate_embedding, fusion_embeddings, f
         return 0.0
     
     if fusion_strategy == 'simple_average':
-        # Simple cosine similarity with average
         return float(cos_sim(candidate_embedding, fusion_embeddings[0]))
     
     elif fusion_strategy == 'overlap_centers':
-        # Maximum similarity to any overlapping cluster
         max_similarity = 0.0
         for fusion_emb in fusion_embeddings:
             similarity = float(cos_sim(candidate_embedding, fusion_emb))
@@ -331,11 +292,9 @@ def compute_couple_compatibility_score(candidate_embedding, fusion_embeddings, f
         return max_similarity
     
     elif fusion_strategy == 'bridge_clusters':
-        # Similarity to bridge embedding
         return float(cos_sim(candidate_embedding, fusion_embeddings[0]))
     
     else:
-        # Fallback: average similarity
         total_similarity = 0.0
         for fusion_emb in fusion_embeddings:
             total_similarity += float(cos_sim(candidate_embedding, fusion_emb))
@@ -387,10 +346,6 @@ def generate_couple_explanation(movie_title, person1_features, person2_features,
         return "This movie offers a good balance that should appeal to both of you."
     
     return f"{movie_title} works because of your " + " and ".join(explanation_parts) + "."
-
-# =============================================================================
-# MAIN RECOMMENDATION FUNCTION
-# =============================================================================
 
 def recommend_movies_for_couple(person1_movies, person2_movies, target_recommendations=5):
     """
