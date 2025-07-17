@@ -20,7 +20,9 @@ from src.movie_scoring import (
 from utils import get_embedding_model
 from narrative_analysis import infer_narrative_style
 from movie_search import fuzzy_search_movies
-from tmdbv3api import Movie, TMDb
+from tmdbv3api import Movie
+movie_api = Movie()
+from tmdbv3api import TMDb
 
 def extract_movie_features(movie_titles):
     """
@@ -45,7 +47,6 @@ def extract_movie_features(movie_titles):
         'narrative_styles': {"tone": [], "complexity": [], "genre_indicator": [], "setting_context": []}
     }
     
-    movie_api = Movie()
     valid_movies = []
     
     st.write(f"🎬 Processing {len(movie_titles)} movies...")
