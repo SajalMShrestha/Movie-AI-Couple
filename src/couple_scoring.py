@@ -175,17 +175,6 @@ def extract_movie_features(movie_titles):
 def find_compatible_expansion_movie(person_features, partner_features, person_name, tmdb_api_key, similarity_threshold=0.3, min_partner_matches=2):
     """
     Find a 6th/7th movie that extends person's taste while being compatible with partner.
-    
-    Args:
-        person_features: Features extracted from person's 5 movies
-        partner_features: Features extracted from partner's 5 movies  
-        person_name: "Sajal" or "Sneha" for logging
-        tmdb_api_key: TMDB API key
-        similarity_threshold: Minimum cosine similarity required (default 0.3)
-        min_partner_matches: Must be similar to at least this many partner movies
-    
-    Returns:
-        Tuple of (movie_title, movie_details) or (None, None) if no good match found
     """
     st.write(f"🎯 Finding compatible expansion movie for {person_name}...")
     
@@ -265,55 +254,55 @@ def find_compatible_expansion_movie(person_features, partner_features, person_na
         st.warning("No partner embeddings available for compatibility check")
         return None, None
     
-    # Fetch candidate movie details and check compatibility
-    tmdb = TMDb()
-    for mid in candidate_movie_ids:
+    # Use the EXISTING fetch_similar_movie_details function instead of Movie API directly
+    fetch_cache = st.session_state.get('fetch_cache', {})
+    
+    for candidate_id in candidate_movie_ids[:30]:  # Check top 30 to save time
         try:
-            movie_details = tmdb.movie(mid)
-            if movie_details:
-                embedding_model = get_embedding_model()
-                embedding = embedding_model.encode(movie_details.overview, convert_to_tensor=True)
+            # Use the working fetch function from utils.py
+            result = fetch_similar_movie_details(candidate_id, fetch_cache)
+            
+            if result is None or result[1] is None:
+                continue
                 
-                # Check similarity to partner's embeddings
-                is_compatible = False
-                for partner_emb in partner_embeddings:
-                    similarity = float(cos_sim(embedding, partner_emb))
-                    if similarity >= similarity_threshold:
-                        is_compatible = True
-                        break
+            mid, payload = result
+            if payload is None:
+                continue
                 
-                if is_compatible:
-                    movie_title = movie_details.title
-                    st.write(f"✅ Found compatible movie: {movie_title}")
-                    compatible_candidates.append((movie_title, movie_details))
-        
+            movie_details, candidate_embedding = payload
+            movie_title = getattr(movie_details, 'title', 'Unknown')
+            
+            # Check similarity to partner's movies
+            partner_similarities = []
+            for partner_emb in partner_embeddings:
+                similarity = float(cos_sim(candidate_embedding, partner_emb))
+                partner_similarities.append(similarity)
+            
+            # Count how many partner movies meet similarity threshold
+            matches_above_threshold = sum(1 for sim in partner_similarities if sim >= similarity_threshold)
+            
+            if matches_above_threshold >= min_partner_matches:
+                max_similarity = max(partner_similarities)
+                compatible_candidates.append((movie_title, movie_details, max_similarity))
+                st.write(f"   ✅ {movie_title} - Compatible ({matches_above_threshold} matches, max sim: {max_similarity:.3f})")
+            
         except Exception as e:
-            st.warning(f"Error fetching movie details for ID {mid}: {e}")
+            continue
     
-    st.write(f"   📋 Found {len(compatible_candidates)} compatible expansion movies")
+    # Update the fetch cache
+    st.session_state['fetch_cache'] = fetch_cache
     
-    if len(compatible_candidates) < min_partner_matches:
-        st.warning(f"Not enough compatible movies found for {person_name}. Found {len(compatible_candidates)}, required {min_partner_matches}")
+    if not compatible_candidates:
+        st.warning(f"No compatible candidates found for {person_name}")
         return None, None
     
-    # Select the best compatible movie
-    best_match = None
-    max_similarity_sum = -1
+    # Step 3: Pick the best compatible option
+    compatible_candidates.sort(key=lambda x: x[2], reverse=True)
     
-    for movie_title, movie_details in compatible_candidates:
-        embedding_model = get_embedding_model()
-        embedding = embedding_model.encode(movie_details.overview, convert_to_tensor=True)
-        
-        similarity_sum = 0
-        for partner_emb in partner_embeddings:
-            similarity_sum += float(cos_sim(embedding, partner_emb))
-        
-        if similarity_sum > max_similarity_sum:
-            max_similarity_sum = similarity_sum
-            best_match = (movie_title, movie_details)
+    best_movie_title, best_movie_details, best_similarity = compatible_candidates[0]
+    st.write(f"🎬 Selected for {person_name}: **{best_movie_title}** (similarity: {best_similarity:.3f})")
     
-    st.write(f"✅ Best compatible expansion movie found: {best_match[0]} (Similarity: {max_similarity_sum:.2f})")
-    return best_match
+    return best_movie_title, best_movie_details
 
 def perform_taste_clustering(person1_features, person2_features):
     """
