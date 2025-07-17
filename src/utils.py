@@ -134,9 +134,12 @@ def fetch_similar_movie_details(m_id, fetch_cache=None):
             fetch_cache[m_id] = None
             return m_id, None
 
-        # Import narrative analysis function
-        from narrative_analysis import infer_narrative_style
-        m_details.narrative_style = infer_narrative_style(m_details.plot)
+        # COMMENTED OUT narrative analysis
+        # from narrative_analysis import infer_narrative_style
+        # m_details.narrative_style = infer_narrative_style(m_details.plot)
+        
+        # Add a dummy narrative style instead:
+        m_details.narrative_style = {"tone": "neutral", "complexity": "simple"}
 
         # Generate embedding
         embedding_model = get_embedding_model()
