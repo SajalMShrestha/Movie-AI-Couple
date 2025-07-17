@@ -42,7 +42,7 @@ if src_dir not in sys.path:
 
 # Import modules with error handling
 try:
-    from src.couple_scoring import recommend_movies_for_couple
+    from couple_scoring import recommend_movies_for_couple
     couple_scoring_available = True
 except ImportError as e:
     st.error(f"❌ Could not import couple_scoring: {e}")
@@ -50,7 +50,7 @@ except ImportError as e:
     couple_scoring_available = False
 
 try:
-    from src.feedback_system import (
+    from feedback_system import (
         get_or_create_numeric_session_id,
         record_feedback_to_sheet,
         record_final_comments_to_sheet
@@ -113,8 +113,7 @@ def initialize_couples_session_state():
 
 def display_favorite_movies():
     """Display both partners' favorite movies at the top."""
-    st.title("🎬 Couples Movie Matcher")
-    st.markdown("*Find movies you'll both love using K-Means Taste Fusion*")
+    st.title("🎬 Screen or Skip")
     st.markdown("---")
     
     # Create two columns for the couples' favorites

@@ -11,9 +11,9 @@ from sentence_transformers.util import cos_sim
 from collections import Counter
 import concurrent.futures
 
-# Import other modules from src
+# Import other modules from src - FIXED function names
 from movie_scoring import (
-    build_enhanced_candidate_pool, 
+    build_custom_candidate_pool,  # ✅ Correct function name
     fetch_similar_movie_details
 )
 from utils import get_embedding_model
@@ -379,9 +379,9 @@ def recommend_movies_for_couple(person1_movies, person2_movies, target_recommend
     combined_years = person1_features['years'] + person2_features['years']
     
     tmdb = TMDb()
-    candidate_movie_ids = build_enhanced_candidate_pool(
+    candidate_movie_ids = build_custom_candidate_pool(  # ✅ Correct function name
         combined_genre_ids, combined_cast_ids, combined_director_ids,
-        combined_years, tmdb.api_key, target_pool_size=200
+        combined_years, tmdb.api_key
     )
     
     # Exclude movies already in their favorites
