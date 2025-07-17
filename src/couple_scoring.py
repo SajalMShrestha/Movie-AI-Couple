@@ -12,7 +12,7 @@ from collections import Counter
 import concurrent.futures
 
 # Import other modules from src - FIXED function names
-from movie_scoring import (
+from src.movie_scoring import (
     build_custom_candidate_pool,  # ✅ Correct function name
     fetch_similar_movie_details
 )
