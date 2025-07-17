@@ -10,6 +10,7 @@ from sklearn.cluster import KMeans
 from sentence_transformers.util import cos_sim
 from collections import Counter
 import concurrent.futures
+import requests # Added for find_compatible_expansion_movie
 
 # Import other modules from src - FIXED function names
 from src.movie_scoring import (
@@ -169,6 +170,149 @@ def extract_movie_features(movie_titles):
     
     st.write(f"   ✅ Successfully processed {len(features['movies_info'])} movies")
     return features
+
+def find_compatible_expansion_movie(person_features, partner_features, person_name, tmdb_api_key, similarity_threshold=0.3, min_partner_matches=2):
+    """
+    Find a 6th/7th movie that extends person's taste while being compatible with partner.
+    
+    Args:
+        person_features: Features extracted from person's 5 movies
+        partner_features: Features extracted from partner's 5 movies  
+        person_name: "Sajal" or "Sneha" for logging
+        tmdb_api_key: TMDB API key
+        similarity_threshold: Minimum cosine similarity required (default 0.3)
+        min_partner_matches: Must be similar to at least this many partner movies
+    
+    Returns:
+        Tuple of (movie_title, movie_details) or (None, None) if no good match found
+    """
+    st.write(f"🎯 Finding compatible expansion movie for {person_name}...")
+    
+    # Step 1: Build person-focused candidate pool (50 movies)
+    st.write(f"📚 Building {person_name}-focused candidate pool...")
+    candidate_movie_ids = set()
+    
+    # Strategy 1: Genre-based discovery (20 movies)
+    for genre_id in list(person_features['genre_ids'])[:2]:  # Top 2 genres
+        try:
+            url = f"https://api.themoviedb.org/3/discover/movie"
+            params = {
+                "api_key": tmdb_api_key,
+                "with_genres": str(genre_id),
+                "sort_by": "popularity.desc",
+                "vote_count.gte": 100,
+                "page": 1
+            }
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                movies = response.json().get("results", [])
+                candidate_movie_ids.update([m["id"] for m in movies[:10]])
+        except Exception as e:
+            st.warning(f"Error with genre discovery: {e}")
+    
+    # Strategy 2: Cast-based discovery (20 movies)  
+    for cast_id in list(person_features['cast_ids'])[:3]:  # Top 3 actors
+        try:
+            url = f"https://api.themoviedb.org/3/discover/movie"
+            params = {
+                "api_key": tmdb_api_key,
+                "with_cast": str(cast_id),
+                "sort_by": "popularity.desc", 
+                "vote_count.gte": 50,
+                "page": 1
+            }
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                movies = response.json().get("results", [])
+                candidate_movie_ids.update([m["id"] for m in movies[:7]])
+        except Exception as e:
+            st.warning(f"Error with cast discovery: {e}")
+    
+    # Strategy 3: Director-based discovery (10 movies)
+    for director_id in list(person_features['director_ids'])[:2]:  # Top 2 directors
+        try:
+            url = f"https://api.themoviedb.org/3/discover/movie"
+            params = {
+                "api_key": tmdb_api_key,
+                "with_crew": str(director_id),
+                "sort_by": "popularity.desc",
+                "vote_count.gte": 50, 
+                "page": 1
+            }
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                movies = response.json().get("results", [])
+                candidate_movie_ids.update([m["id"] for m in movies[:5]])
+        except Exception as e:
+            st.warning(f"Error with director discovery: {e}")
+    
+    # Limit to 50 candidates total
+    candidate_movie_ids = list(candidate_movie_ids)[:50]
+    st.write(f"   📋 Found {len(candidate_movie_ids)} {person_name}-focused candidates")
+    
+    if not candidate_movie_ids:
+        st.warning(f"No candidates found for {person_name}")
+        return None, None
+    
+    # Step 2: Filter by partner compatibility
+    st.write(f"💕 Filtering by partner compatibility...")
+    compatible_candidates = []
+    
+    # Get partner embeddings for similarity comparison
+    partner_embeddings = partner_features['embeddings']
+    if not partner_embeddings:
+        st.warning("No partner embeddings available for compatibility check")
+        return None, None
+    
+    # Fetch candidate movie details and check compatibility
+    tmdb = TMDb()
+    for mid in candidate_movie_ids:
+        try:
+            movie_details = tmdb.movie(mid)
+            if movie_details:
+                embedding_model = get_embedding_model()
+                embedding = embedding_model.encode(movie_details.overview, convert_to_tensor=True)
+                
+                # Check similarity to partner's embeddings
+                is_compatible = False
+                for partner_emb in partner_embeddings:
+                    similarity = float(cos_sim(embedding, partner_emb))
+                    if similarity >= similarity_threshold:
+                        is_compatible = True
+                        break
+                
+                if is_compatible:
+                    movie_title = movie_details.title
+                    st.write(f"✅ Found compatible movie: {movie_title}")
+                    compatible_candidates.append((movie_title, movie_details))
+        
+        except Exception as e:
+            st.warning(f"Error fetching movie details for ID {mid}: {e}")
+    
+    st.write(f"   📋 Found {len(compatible_candidates)} compatible expansion movies")
+    
+    if len(compatible_candidates) < min_partner_matches:
+        st.warning(f"Not enough compatible movies found for {person_name}. Found {len(compatible_candidates)}, required {min_partner_matches}")
+        return None, None
+    
+    # Select the best compatible movie
+    best_match = None
+    max_similarity_sum = -1
+    
+    for movie_title, movie_details in compatible_candidates:
+        embedding_model = get_embedding_model()
+        embedding = embedding_model.encode(movie_details.overview, convert_to_tensor=True)
+        
+        similarity_sum = 0
+        for partner_emb in partner_embeddings:
+            similarity_sum += float(cos_sim(embedding, partner_emb))
+        
+        if similarity_sum > max_similarity_sum:
+            max_similarity_sum = similarity_sum
+            best_match = (movie_title, movie_details)
+    
+    st.write(f"✅ Best compatible expansion movie found: {best_match[0]} (Similarity: {max_similarity_sum:.2f})")
+    return best_match
 
 def perform_taste_clustering(person1_features, person2_features):
     """
@@ -367,6 +511,91 @@ def recommend_movies_for_couple(person1_movies, person2_movies, target_recommend
     
     st.write("👤 Analyzing Person 2's taste...")
     person2_features = extract_movie_features(person2_movies)
+
+    # Find compatible expansion movies
+    st.write("🎯 Finding compatible expansion movies...")
+    tmdb = TMDb()
+
+    # Find 6th movie for Person 1 (compatible with Person 2)
+    person1_expansion_title, person1_expansion_details = find_compatible_expansion_movie(
+        person1_features, person2_features, "Person 1", tmdb.api_key
+    )
+
+    # Find 7th movie for Person 2 (compatible with Person 1) 
+    person2_expansion_title, person2_expansion_details = find_compatible_expansion_movie(
+        person2_features, person1_features, "Person 2", tmdb.api_key
+    )
+
+    # Add expansion movies to the features if found
+    if person1_expansion_title and person1_expansion_details:
+        st.write(f"✅ Added expansion movie for Person 1: {person1_expansion_title}")
+        
+        # Extract features from expansion movie and add to person1_features
+        try:
+            overview = getattr(person1_expansion_details, 'overview', '') or ''
+            if overview:
+                # Add to movies_info
+                movie_info = {"title": person1_expansion_title, "genres": [], "year": None}
+                
+                # Extract genres
+                genres_list = getattr(person1_expansion_details, 'genres', [])
+                for g in genres_list:
+                    if isinstance(g, dict):
+                        name = g.get('name', '')
+                        genre_id = g.get('id', 0)
+                    else:
+                        name = getattr(g, 'name', '')
+                        genre_id = getattr(g, 'id', 0)
+                    
+                    if name:
+                        person1_features['genres'].add(name)
+                        movie_info["genres"].append(name)
+                    if genre_id:
+                        person1_features['genre_ids'].add(genre_id)
+                
+                # Generate embedding
+                embedding_model = get_embedding_model()
+                embedding = embedding_model.encode(overview, convert_to_tensor=True)
+                person1_features['embeddings'].append(embedding)
+                person1_features['movies_info'].append(movie_info)
+                
+        except Exception as e:
+            st.warning(f"Error processing expansion movie for Person 1: {e}")
+
+    if person2_expansion_title and person2_expansion_details:
+        st.write(f"✅ Added expansion movie for Person 2: {person2_expansion_title}")
+        
+        # Extract features from expansion movie and add to person2_features  
+        try:
+            overview = getattr(person2_expansion_details, 'overview', '') or ''
+            if overview:
+                # Add to movies_info
+                movie_info = {"title": person2_expansion_title, "genres": [], "year": None}
+                
+                # Extract genres
+                genres_list = getattr(person2_expansion_details, 'genres', [])
+                for g in genres_list:
+                    if isinstance(g, dict):
+                        name = g.get('name', '')
+                        genre_id = g.get('id', 0)
+                    else:
+                        name = getattr(g, 'name', '')
+                        genre_id = getattr(g, 'id', 0)
+                    
+                    if name:
+                        person2_features['genres'].add(name)
+                        movie_info["genres"].append(name)
+                    if genre_id:
+                        person2_features['genre_ids'].add(genre_id)
+                
+                # Generate embedding
+                embedding_model = get_embedding_model()
+                embedding = embedding_model.encode(overview, convert_to_tensor=True)
+                person2_features['embeddings'].append(embedding)
+                person2_features['movies_info'].append(movie_info)
+                
+        except Exception as e:
+            st.warning(f"Error processing expansion movie for Person 2: {e}")
     
     # Perform taste clustering
     clustering_results = perform_taste_clustering(person1_features, person2_features)
