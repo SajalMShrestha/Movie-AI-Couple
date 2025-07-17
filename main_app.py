@@ -7,6 +7,29 @@ import streamlit as st
 import sys
 import os
 
+# Add this to your code temporarily to debug
+from tmdbv3api import TMDb
+tmdb = TMDb()
+print(f"TMDB API Key: {tmdb.api_key}")
+
+# =============================================================================
+# DEBUG SECTION: Test movie_scoring imports
+# =============================================================================
+try:
+    from movie_scoring import build_custom_candidate_pool
+    st.write("✅ build_custom_candidate_pool import successful")
+except Exception as e:
+    st.write(f"❌ build_custom_candidate_pool import failed: {e}")
+
+try:
+    from movie_scoring import fetch_similar_movie_details
+    st.write("✅ fetch_similar_movie_details import successful")
+except Exception as e:
+    st.write(f"❌ fetch_similar_movie_details import failed: {e}")
+# =============================================================================
+# END DEBUG SECTION
+# =============================================================================
+
 # =============================================================================
 # COUPLE CONFIGURATION - EDIT THIS SECTION FOR EACH COUPLE
 # =============================================================================
@@ -325,4 +348,3 @@ if __name__ == "__main__":
     main()
 
     #test status
-    

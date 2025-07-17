@@ -35,9 +35,16 @@ def build_custom_candidate_pool(favorite_genre_ids, favorite_cast_ids, favorite_
     Returns:
         Set of candidate movie IDs
     """
+    # ADD DEBUG AT THE START
+    st.write(f"🔍 Building candidate pool with:")
+    st.write(f"   - Genres: {len(favorite_genre_ids)} items")
+    st.write(f"   - Cast: {len(favorite_cast_ids)} items") 
+    st.write(f"   - Directors: {len(favorite_director_ids)} items")
+    st.write(f"   - Years: {favorite_years}")
     candidate_movie_ids = set()
     
     # Strategy 1: Discover by Genre (40-60 movies)
+    st.write("🎭 Trying genre discovery...")
     for genre_id in list(favorite_genre_ids)[:3]:
         try:
             url = f"https://api.themoviedb.org/3/discover/movie"
@@ -52,6 +59,9 @@ def build_custom_candidate_pool(favorite_genre_ids, favorite_cast_ids, favorite_
             if response.status_code == 200:
                 movies = response.json().get("results", [])
                 candidate_movie_ids.update([m["id"] for m in movies[:20]])
+                st.write(f"   Found {len(movies)} movies for genre {genre_id}")
+            else:
+                st.write(f"   API error for genre {genre_id}: {response.status_code}")
         except Exception as e:
             st.warning(f"Error discovering by genre {genre_id}: {e}")
     
@@ -168,6 +178,8 @@ def build_custom_candidate_pool(favorite_genre_ids, favorite_cast_ids, favorite_
         except Exception as e:
             st.warning(f"Error getting high-rated movies for genre {genre_id}: {e}")
     
+    # ADD AT THE END
+    st.write(f"🎬 Total candidates found: {len(candidate_movie_ids)}")
     return candidate_movie_ids
 
 def identify_taste_clusters(favorite_embeddings, favorite_movies_info):
