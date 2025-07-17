@@ -398,22 +398,40 @@ def recommend_movies_for_couple(person1_movies, person2_movies, target_recommend
         for fut in concurrent.futures.as_completed(futures):
             try:
                 result = fut.result()
-                if result is None or result[1] is None:
+                st.write(f"🔍 Processing result: {result is not None}")
+                
+                if result is None:
+                    st.write("❌ Result is None")
                     continue
+                if result[1] is None:
+                    st.write("❌ Result[1] (payload) is None") 
+                    continue
+                    
                 mid, payload = result
+                st.write(f"✅ Got movie ID: {mid}")
+                
                 m, embedding = payload
-                if m is None or embedding is None:
+                if m is None:
+                    st.write("❌ Movie object is None")
                     continue
+                if embedding is None:
+                    st.write("❌ Embedding is None")
+                    continue
+                    
+                movie_title = getattr(m, 'title', 'Unknown')
+                vote_count = getattr(m, 'vote_count', 0)
+                st.write(f"🎬 Movie: {movie_title}, Votes: {vote_count}")
                 
                 # Skip if in favorites
-                movie_title = getattr(m, 'title', '').lower()
-                if movie_title in all_favorite_titles:
+                if movie_title.lower() in all_favorite_titles:
+                    st.write(f"⚠️ Skipped {movie_title} - already in favorites")
                     continue
-                
-                vote_count = getattr(m, 'vote_count', 0)
-                if vote_count < 30:  # Lower threshold for couples
+                    
+                if vote_count < 30:
+                    st.write(f"⚠️ Skipped {movie_title} - low vote count ({vote_count})")
                     continue
-                
+                    
+                st.write(f"✅ Added to candidates: {movie_title}")
                 candidate_movies[mid] = (m, embedding)
             except Exception as e:
                 continue
