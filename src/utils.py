@@ -71,15 +71,20 @@ def fetch_similar_movie_details(m_id, fetch_cache=None):
     Returns:
         Tuple of (movie_id, (movie_details, embedding)) or (movie_id, None)
     """
+    # ADD DEBUG AT START
+    st.write(f"🔍 Fetching details for movie ID: {m_id}")
     if fetch_cache is None:
         fetch_cache = {}
     
-    if m_id in fetch_cache:
-        return m_id, fetch_cache[m_id]
-    
     try:
+        # Check cache first
+        if m_id in fetch_cache:
+            st.write(f"✅ Found in cache: {m_id}")
+            return m_id, fetch_cache[m_id]
+        
         movie_api = Movie()
         m_details = movie_api.details(m_id)
+        st.write(f"📄 Got details for: {getattr(m_details, 'title', 'Unknown')}")
         m_credits = movie_api.credits(m_id)
 
         # Robust genre, cast, director extraction
@@ -119,7 +124,13 @@ def fetch_similar_movie_details(m_id, fetch_cache=None):
         m_details.plot = getattr(m_details, 'overview', '') or ''
 
         # Skip if plot is missing or too short
-        if not m_details.plot or len(m_details.plot.split()) < 5:
+        overview = m_details.plot
+        if not overview:
+            st.write(f"❌ No overview for movie ID: {m_id}")
+            fetch_cache[m_id] = None
+            return m_id, None
+        st.write(f"📝 Overview length: {len(overview)}")
+        if len(overview.split()) < 5:
             fetch_cache[m_id] = None
             return m_id, None
 
@@ -130,11 +141,13 @@ def fetch_similar_movie_details(m_id, fetch_cache=None):
         # Generate embedding
         embedding_model = get_embedding_model()
         embedding = embedding_model.encode(m_details.plot, convert_to_tensor=True)
+        st.write(f"🧠 Generated embedding shape: {embedding.shape}")
 
         fetch_cache[m_id] = (m_details, embedding)
         return m_id, (m_details, embedding)
 
     except Exception as e:
+        st.write(f"❌ Error fetching movie {m_id}: {e}")
         fetch_cache[m_id] = None
         return m_id, None
 
