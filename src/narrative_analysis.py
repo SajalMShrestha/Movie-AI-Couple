@@ -3,6 +3,11 @@ Narrative analysis and text processing for movie plots.
 """
 
 import nltk
+try:
+    nltk.download('punkt_tab', quiet=True)
+except:
+    pass
+
 from nltk.sentiment import SentimentIntensityAnalyzer
 from nltk import word_tokenize
 from nltk.corpus import stopwords
