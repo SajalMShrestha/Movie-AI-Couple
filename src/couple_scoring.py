@@ -756,17 +756,17 @@ def recommend_movies_for_couple(person1_movies, person2_movies, target_recommend
     st.write(f"✅ Generated {len(final_recommendations)} couple recommendations!")
     
     # Generate additional personalized recommendations
-    from tmdbv3api import TMDb
-    tmdb = TMDb()
+    from tmdbv3api import TMDb as TMDbAPI
+    tmdb_instance = TMDbAPI()
 
     # Find Sajal's 6th movie (compatible with Sneha)
     sajal_movie_title, sajal_score = find_sajal_compatible_movie(
-        person1_features, person2_features, tmdb.api_key
+        person1_features, person2_features, tmdb_instance.api_key
     )
 
     # Find Sneha's 7th movie (compatible with Sajal)
     sneha_movie_title, sneha_score = find_sneha_compatible_movie(
-        person2_features, person1_features, tmdb.api_key
+        person2_features, person1_features, tmdb_instance.api_key
     )
 
     # Combine all recommendations
