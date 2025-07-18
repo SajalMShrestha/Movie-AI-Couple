@@ -795,6 +795,149 @@ def find_decade_time_machine_movie(person1_features, person2_features, tmdb_api_
     st.write("   ⚠️ No decade time machine movie found meeting criteria")
     return None, 0
 
+def find_international_cinema_movie(person1_features, person2_features, tmdb_api_key):
+    """
+    Find a highly-rated international (non-US) film that matches their dominant genres.
+    Focuses on foreign cinema with universal themes and high quality.
+    
+    Returns:
+        Tuple of (movie_title, score) or (None, 0) if no good match found
+    """
+    st.write("🌍 Finding International Cinema movie...")
+    
+    # Analyze genre preferences from both people's favorites
+    combined_genres = person1_features['genres'] | person2_features['genres']
+    
+    # Count genre appearances across all movies
+    genre_counts = {}
+    all_movies_info = person1_features['movies_info'] + person2_features['movies_info']
+    
+    for movie_info in all_movies_info:
+        for genre in movie_info.get('genres', []):
+            genre_counts[genre] = genre_counts.get(genre, 0) + 1
+    
+    # Sort genres by frequency (most dominant first)
+    sorted_genres = sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)
+    
+    st.write(f"   📊 Genre analysis: {dict(sorted_genres)}")
+    st.write(f"   🎯 Will try genres in order: {[genre for genre, count in sorted_genres]}")
+    
+    # Map genre names to TMDB genre IDs
+    genre_id_map = {
+        "Action": 28, "Adventure": 12, "Animation": 16, "Comedy": 35, "Crime": 80,
+        "Documentary": 99, "Drama": 18, "Family": 10751, "Fantasy": 14, "History": 36,
+        "Horror": 27, "Music": 10402, "Mystery": 9648, "Romance": 10749, "Science Fiction": 878,
+        "TV Movie": 10770, "Thriller": 53, "War": 10752, "Western": 37
+    }
+    
+    # Try each genre in order of dominance
+    for genre_name, count in sorted_genres:
+        st.write(f"   🔍 Searching for international {genre_name} films...")
+        
+        genre_id = genre_id_map.get(genre_name)
+        if not genre_id:
+            st.write(f"     ⚠️ No genre ID found for {genre_name}")
+            continue
+        
+        try:
+            # Search for international films in this genre
+            url = f"https://api.themoviedb.org/3/discover/movie"
+            params = {
+                "api_key": tmdb_api_key,
+                "with_genres": str(genre_id),
+                "sort_by": "vote_average.desc",
+                "vote_average.gte": 7.5,
+                "vote_count.gte": 200,  # Ensure some credibility
+                "with_original_language": "!en|en",  # Include both non-English and English
+                "page": 1
+            }
+            
+            response = requests.get(url, params=params)
+            
+            if response.status_code == 200:
+                movies = response.json().get("results", [])
+                st.write(f"     🎬 Found {len(movies)} potential international films")
+                
+                # Filter out US-made films and find best international option
+                fetch_cache = st.session_state.get('fetch_cache', {})
+                
+                for movie_data in movies[:30]:  # Check top 30 for speed
+                    try:
+                        movie_id = movie_data['id']
+                        movie_title = movie_data.get('title', 'Unknown')
+                        vote_average = movie_data.get('vote_average', 0)
+                        vote_count = movie_data.get('vote_count', 0)
+                        original_language = movie_data.get('original_language', '')
+                        
+                        # Get detailed movie info to check production country
+                        result = fetch_similar_movie_details(movie_id, fetch_cache)
+                        
+                        if result and result[1]:
+                            movie_details, embedding = result[1]
+                            
+                            # Check production countries to exclude US films
+                            production_countries = getattr(movie_details, 'production_countries', [])
+                            is_us_film = False
+                            
+                            if production_countries:
+                                for country in production_countries:
+                                    if isinstance(country, dict):
+                                        country_code = country.get('iso_3166_1', '')
+                                    else:
+                                        country_code = getattr(country, 'iso_3166_1', '')
+                                    
+                                    if country_code == 'US':
+                                        is_us_film = True
+                                        break
+                            
+                            # Skip US films - we want international cinema
+                            if is_us_film:
+                                continue
+                            
+                            # Verify it meets our quality criteria
+                            if vote_average >= 7.5:
+                                overview = getattr(movie_details, 'overview', '')
+                                
+                                # Ensure it has a proper plot
+                                if overview and len(overview.split()) >= 10:
+                                    # Determine country/region for display
+                                    origin_info = ""
+                                    if production_countries:
+                                        country_names = []
+                                        for country in production_countries[:2]:  # Show max 2 countries
+                                            if isinstance(country, dict):
+                                                name = country.get('name', '')
+                                            else:
+                                                name = getattr(country, 'name', '')
+                                            if name:
+                                                country_names.append(name)
+                                        if country_names:
+                                            origin_info = f" ({', '.join(country_names)})"
+                                    
+                                    st.write(f"     ✨ International gem found: {movie_title}{origin_info} - Rating: {vote_average:.1f}, Language: {original_language}")
+                                    
+                                    # Calculate discovery score based on rating and international appeal
+                                    discovery_score = (vote_average / 10) * 0.9 + 0.1  # Slight bonus for international films
+                                    
+                                    st.session_state['fetch_cache'] = fetch_cache
+                                    return movie_title, discovery_score
+                        
+                    except Exception as e:
+                        continue
+                
+                st.write(f"     💫 No suitable international {genre_name} films found")
+            
+            else:
+                st.write(f"     ❌ API error for {genre_name}: {response.status_code}")
+        
+        except Exception as e:
+            st.write(f"     ❌ Error searching {genre_name}: {e}")
+            continue
+    
+    # If all genres failed
+    st.write("   ⚠️ No international cinema movie found meeting criteria")
+    return None, 0
+
 def compute_couple_compatibility_score(candidate_embedding, fusion_embeddings, fusion_strategy):
     """
     Compute how well a candidate movie matches the couple's fused taste.
@@ -1070,6 +1213,15 @@ def recommend_movies_for_couple(person1_movies, person2_movies, target_recommend
     if decade_movie_title:
         explanation = f"{decade_movie_title} is a hidden gem classic that represents exceptional filmmaking from an era you haven't explored much together - a true time machine discovery."
         extended_recommendations.append((decade_movie_title, decade_movie_score, explanation))
+
+    # Find International Cinema Discovery (10th movie)
+    international_movie_title, international_movie_score = find_international_cinema_movie(
+        person1_features, person2_features, tmdb_instance.api_key
+    )
+
+    if international_movie_title:
+        explanation = f"{international_movie_title} is an exceptional international film that showcases world-class cinema while matching your taste preferences - a perfect window into global storytelling."
+        extended_recommendations.append((international_movie_title, international_movie_score, explanation))
 
     st.write(f"✅ Generated {len(extended_recommendations)} total couple recommendations!")
 
