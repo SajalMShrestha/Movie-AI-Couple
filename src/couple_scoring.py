@@ -923,9 +923,11 @@ def recommend_movies_for_couple(person1_movies, person2_movies, target_recommend
         extended_recommendations.append((sneha_movie_title, sneha_score, explanation))
 
     # Find Critical Darling Discovery (8th movie)
+    st.write("🔍 About to search for Critical Darling...")
     critical_darling_title, critical_darling_score = find_critical_darling_discovery(
         person1_features, person2_features, tmdb_instance.api_key
     )
+    st.write(f"🔍 Critical Darling result: {critical_darling_title}, {critical_darling_score}")
 
     if critical_darling_title:
         explanation = f"{critical_darling_title} is a critically acclaimed recent gem that bridges both your tastes while introducing you to award-worthy cinema you might have missed."
