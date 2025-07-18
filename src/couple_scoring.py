@@ -524,6 +524,148 @@ def find_sneha_compatible_movie(sneha_features, sajal_features, tmdb_api_key):
     compatible_candidates.sort(key=lambda x: x[1], reverse=True)
     return compatible_candidates[0]
 
+def find_critical_darling_discovery(person1_features, person2_features, tmdb_api_key):
+    """
+    Find a highly-rated "critical darling" from the past 3 years that matches 
+    the couple's combined preferences with tiered fallback strategy.
+    
+    Returns:
+        Tuple of (movie_title, score) or (None, 0) if no good match found
+    """
+    st.write("🏆 Finding Critical Darling Discovery movie...")
+    
+    # Get current year and target years (past 3 years)
+    from datetime import datetime
+    current_year = datetime.now().year
+    
+    # Tiered search strategy
+    search_tiers = [
+        {"rating": 7.5, "years": [current_year - 1, current_year - 2, current_year - 3], "desc": "Tier 1: 7.5+ rating, past 3 years"},
+        {"rating": 7.0, "years": [current_year - 1, current_year - 2, current_year - 3], "desc": "Tier 2: 7.0+ rating, past 3 years"},
+        {"rating": 7.0, "years": [current_year - 1, current_year - 2, current_year - 3, current_year - 4, current_year - 5], "desc": "Tier 3: 7.0+ rating, past 5 years"}
+    ]
+    
+    for tier in search_tiers:
+        st.write(f"   🔍 {tier['desc']}")
+        
+        # Build candidate pool for this tier
+        candidate_movie_ids = set()
+        
+        # Strategy 1: High-rated movies from target years
+        for year in tier["years"]:
+            try:
+                url = f"https://api.themoviedb.org/3/discover/movie"
+                params = {
+                    "api_key": tmdb_api_key,
+                    "primary_release_year": year,
+                    "sort_by": "vote_average.desc",
+                    "vote_count.gte": 80,
+                    "vote_average.gte": tier["rating"],
+                    "page": 1
+                }
+                response = requests.get(url, params=params)
+                if response.status_code == 200:
+                    movies = response.json().get("results", [])
+                    candidate_movie_ids.update([m["id"] for m in movies[:10]])
+            except Exception as e:
+                continue
+        
+        # Strategy 2: Award-contender style films from date range
+        try:
+            start_year = min(tier["years"])
+            end_year = max(tier["years"])
+            url = f"https://api.themoviedb.org/3/discover/movie"
+            params = {
+                "api_key": tmdb_api_key,
+                "primary_release_date.gte": f"{start_year}-01-01",
+                "primary_release_date.lte": f"{end_year}-12-31",
+                "sort_by": "vote_average.desc",
+                "vote_count.gte": 200,
+                "vote_average.gte": tier["rating"],
+                "page": 1
+            }
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                movies = response.json().get("results", [])
+                candidate_movie_ids.update([m["id"] for m in movies[:15]])
+        except Exception as e:
+            pass
+        
+        candidate_movie_ids = list(candidate_movie_ids)[:60]
+        
+        if not candidate_movie_ids:
+            continue
+        
+        # Filter and score candidates for this tier
+        compatible_candidates = []
+        person1_embeddings = person1_features['embeddings']
+        person2_embeddings = person2_features['embeddings']
+        
+        if not person1_embeddings or not person2_embeddings:
+            continue
+        
+        fetch_cache = st.session_state.get('fetch_cache', {})
+        
+        for candidate_id in candidate_movie_ids[:40]:
+            try:
+                result = fetch_similar_movie_details(candidate_id, fetch_cache)
+                
+                if result is None or result[1] is None:
+                    continue
+                    
+                mid, payload = result
+                if payload is None:
+                    continue
+                    
+                movie_details, candidate_embedding = payload
+                movie_title = getattr(movie_details, 'title', 'Unknown')
+                vote_average = getattr(movie_details, 'vote_average', 0) or 0
+                vote_count = getattr(movie_details, 'vote_count', 0) or 0
+                
+                # Skip if not meeting tier criteria
+                if vote_average < tier["rating"] or vote_count < 80:
+                    continue
+                
+                # Check compatibility with both people
+                person1_similarities = []
+                for p1_emb in person1_embeddings:
+                    similarity = float(cos_sim(candidate_embedding, p1_emb))
+                    person1_similarities.append(similarity)
+                
+                person2_similarities = []
+                for p2_emb in person2_embeddings:
+                    similarity = float(cos_sim(candidate_embedding, p2_emb))
+                    person2_similarities.append(similarity)
+                
+                # Calculate compatibility scores
+                person1_max_sim = max(person1_similarities) if person1_similarities else 0
+                person2_max_sim = max(person2_similarities) if person2_similarities else 0
+                
+                # Require decent compatibility with both (0.2 threshold for discovery)
+                if person1_max_sim >= 0.2 and person2_max_sim >= 0.2:
+                    combined_compatibility = (person1_max_sim + person2_max_sim) / 2
+                    quality_score = vote_average / 10
+                    discovery_score = (combined_compatibility * 0.4) + (quality_score * 0.6)
+                    
+                    compatible_candidates.append((movie_title, discovery_score, vote_average))
+                
+            except Exception as e:
+                continue
+        
+        st.session_state['fetch_cache'] = fetch_cache
+        
+        # If we found compatible candidates in this tier, return the best one
+        if compatible_candidates:
+            compatible_candidates.sort(key=lambda x: x[1], reverse=True)
+            best_movie, best_score, rating = compatible_candidates[0]
+            
+            st.write(f"   🎬 Critical Darling found: {best_movie} (Rating: {rating:.1f})")
+            return best_movie, best_score
+    
+    # If all tiers failed
+    st.write("   ⚠️ No critical darling found meeting compatibility criteria")
+    return None, 0
+
 def compute_couple_compatibility_score(candidate_embedding, fusion_embeddings, fusion_strategy):
     """
     Compute how well a candidate movie matches the couple's fused taste.
@@ -779,6 +921,15 @@ def recommend_movies_for_couple(person1_movies, person2_movies, target_recommend
     if sneha_movie_title:
         explanation = f"{sneha_movie_title} works because of your shared love for {', '.join(list(person1_features['genres'] & person2_features['genres'])[:3])} and brings in Sneha's preferred style while staying Sajal-compatible."
         extended_recommendations.append((sneha_movie_title, sneha_score, explanation))
+
+    # Find Critical Darling Discovery (8th movie)
+    critical_darling_title, critical_darling_score = find_critical_darling_discovery(
+        person1_features, person2_features, tmdb_instance.api_key
+    )
+
+    if critical_darling_title:
+        explanation = f"{critical_darling_title} is a critically acclaimed recent gem that bridges both your tastes while introducing you to award-worthy cinema you might have missed."
+        extended_recommendations.append((critical_darling_title, critical_darling_score, explanation))
 
     st.write(f"✅ Generated {len(extended_recommendations)} total couple recommendations!")
 
