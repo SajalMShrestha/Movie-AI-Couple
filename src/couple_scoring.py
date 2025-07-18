@@ -268,6 +268,262 @@ def perform_taste_clustering(person1_features, person2_features):
     
     return clustering_results
 
+def find_sajal_compatible_movie(sajal_features, sneha_features, tmdb_api_key):
+    """
+    Find a movie that matches Sajal's taste but is compatible with Sneha.
+    
+    Returns:
+        Tuple of (movie_title, score) or (None, 0) if no good match found
+    """
+    st.write("🎯 Finding Sajal-focused but Sneha-compatible movie...")
+    
+    # Step 1: Build Sajal-focused candidate pool (100 movies)
+    candidate_movie_ids = set()
+    
+    # Strategy 1: Genre-based discovery
+    for genre_id in list(sajal_features['genre_ids'])[:3]:
+        try:
+            url = f"https://api.themoviedb.org/3/discover/movie"
+            params = {
+                "api_key": tmdb_api_key,
+                "with_genres": str(genre_id),
+                "sort_by": "popularity.desc",
+                "vote_count.gte": 100,
+                "page": 1
+            }
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                movies = response.json().get("results", [])
+                candidate_movie_ids.update([m["id"] for m in movies[:15]])
+        except Exception as e:
+            continue
+    
+    # Strategy 2: Cast-based discovery  
+    for cast_id in list(sajal_features['cast_ids'])[:4]:
+        try:
+            url = f"https://api.themoviedb.org/3/discover/movie"
+            params = {
+                "api_key": tmdb_api_key,
+                "with_cast": str(cast_id),
+                "sort_by": "popularity.desc", 
+                "vote_count.gte": 50,
+                "page": 1
+            }
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                movies = response.json().get("results", [])
+                candidate_movie_ids.update([m["id"] for m in movies[:10]])
+        except Exception as e:
+            continue
+    
+    # Strategy 3: Director-based discovery
+    for director_id in list(sajal_features['director_ids'])[:3]:
+        try:
+            url = f"https://api.themoviedb.org/3/discover/movie"
+            params = {
+                "api_key": tmdb_api_key,
+                "with_crew": str(director_id),
+                "sort_by": "popularity.desc",
+                "vote_count.gte": 50, 
+                "page": 1
+            }
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                movies = response.json().get("results", [])
+                candidate_movie_ids.update([m["id"] for m in movies[:8]])
+        except Exception as e:
+            continue
+    
+    candidate_movie_ids = list(candidate_movie_ids)[:100]
+    
+    if not candidate_movie_ids:
+        return None, 0
+    
+    # Step 2: Filter by Sneha compatibility
+    compatible_candidates = []
+    sneha_embeddings = sneha_features['embeddings']
+    
+    if not sneha_embeddings:
+        return None, 0
+    
+    fetch_cache = st.session_state.get('fetch_cache', {})
+    
+    for candidate_id in candidate_movie_ids[:50]:  # Process 50 for speed
+        try:
+            result = fetch_similar_movie_details(candidate_id, fetch_cache)
+            
+            if result is None or result[1] is None:
+                continue
+                
+            mid, payload = result
+            if payload is None:
+                continue
+                
+            movie_details, candidate_embedding = payload
+            movie_title = getattr(movie_details, 'title', 'Unknown')
+            
+            # Check similarity to Sneha's movies
+            sneha_similarities = []
+            for sneha_emb in sneha_embeddings:
+                similarity = float(cos_sim(candidate_embedding, sneha_emb))
+                sneha_similarities.append(similarity)
+            
+            # Count matches above 0.3 threshold
+            matches_above_threshold = sum(1 for sim in sneha_similarities if sim >= 0.3)
+            
+            if matches_above_threshold >= 2:
+                max_similarity = max(sneha_similarities)
+                compatible_candidates.append((movie_title, max_similarity))
+            
+        except Exception as e:
+            continue
+    
+    st.session_state['fetch_cache'] = fetch_cache
+    
+    if not compatible_candidates:
+        # Fallback: return best available option
+        if candidate_movie_ids:
+            try:
+                fallback_result = fetch_similar_movie_details(candidate_movie_ids[0], fetch_cache)
+                if fallback_result and fallback_result[1]:
+                    movie_details, _ = fallback_result[1]
+                    return getattr(movie_details, 'title', 'Unknown'), 0.5
+            except:
+                pass
+        return None, 0
+    
+    # Return best compatible option
+    compatible_candidates.sort(key=lambda x: x[1], reverse=True)
+    return compatible_candidates[0]
+
+def find_sneha_compatible_movie(sneha_features, sajal_features, tmdb_api_key):
+    """
+    Find a movie that matches Sneha's taste but is compatible with Sajal.
+    
+    Returns:
+        Tuple of (movie_title, score) or (None, 0) if no good match found
+    """
+    st.write("💕 Finding Sneha-focused but Sajal-compatible movie...")
+    
+    # Step 1: Build Sneha-focused candidate pool (100 movies)
+    candidate_movie_ids = set()
+    
+    # Strategy 1: Genre-based discovery
+    for genre_id in list(sneha_features['genre_ids'])[:3]:
+        try:
+            url = f"https://api.themoviedb.org/3/discover/movie"
+            params = {
+                "api_key": tmdb_api_key,
+                "with_genres": str(genre_id),
+                "sort_by": "popularity.desc",
+                "vote_count.gte": 100,
+                "page": 1
+            }
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                movies = response.json().get("results", [])
+                candidate_movie_ids.update([m["id"] for m in movies[:15]])
+        except Exception as e:
+            continue
+    
+    # Strategy 2: Cast-based discovery  
+    for cast_id in list(sneha_features['cast_ids'])[:4]:
+        try:
+            url = f"https://api.themoviedb.org/3/discover/movie"
+            params = {
+                "api_key": tmdb_api_key,
+                "with_cast": str(cast_id),
+                "sort_by": "popularity.desc", 
+                "vote_count.gte": 50,
+                "page": 1
+            }
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                movies = response.json().get("results", [])
+                candidate_movie_ids.update([m["id"] for m in movies[:10]])
+        except Exception as e:
+            continue
+    
+    # Strategy 3: Director-based discovery
+    for director_id in list(sneha_features['director_ids'])[:3]:
+        try:
+            url = f"https://api.themoviedb.org/3/discover/movie"
+            params = {
+                "api_key": tmdb_api_key,
+                "with_crew": str(director_id),
+                "sort_by": "popularity.desc",
+                "vote_count.gte": 50, 
+                "page": 1
+            }
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                movies = response.json().get("results", [])
+                candidate_movie_ids.update([m["id"] for m in movies[:8]])
+        except Exception as e:
+            continue
+    
+    candidate_movie_ids = list(candidate_movie_ids)[:100]
+    
+    if not candidate_movie_ids:
+        return None, 0
+    
+    # Step 2: Filter by Sajal compatibility
+    compatible_candidates = []
+    sajal_embeddings = sajal_features['embeddings']
+    
+    if not sajal_embeddings:
+        return None, 0
+    
+    fetch_cache = st.session_state.get('fetch_cache', {})
+    
+    for candidate_id in candidate_movie_ids[:50]:  # Process 50 for speed
+        try:
+            result = fetch_similar_movie_details(candidate_id, fetch_cache)
+            
+            if result is None or result[1] is None:
+                continue
+                
+            mid, payload = result
+            if payload is None:
+                continue
+                
+            movie_details, candidate_embedding = payload
+            movie_title = getattr(movie_details, 'title', 'Unknown')
+            
+            # Check similarity to Sajal's movies
+            sajal_similarities = []
+            for sajal_emb in sajal_embeddings:
+                similarity = float(cos_sim(candidate_embedding, sajal_emb))
+                sajal_similarities.append(similarity)
+            
+            # Count matches above 0.3 threshold
+            matches_above_threshold = sum(1 for sim in sajal_similarities if sim >= 0.3)
+            
+            if matches_above_threshold >= 2:
+                max_similarity = max(sajal_similarities)
+                compatible_candidates.append((movie_title, max_similarity))
+            
+        except Exception as e:
+            continue
+    
+    st.session_state['fetch_cache'] = fetch_cache
+    
+    if not compatible_candidates:
+        # Fallback: return best available option
+        if candidate_movie_ids:
+            try:
+                fallback_result = fetch_similar_movie_details(candidate_movie_ids[0], fetch_cache)
+                if fallback_result and fallback_result[1]:
+                    movie_details, _ = fallback_result[1]
+                    return getattr(movie_details, 'title', 'Unknown'), 0.5
+            except:
+                pass
+        return None, 0
+    
+    # Return best compatible option
+    compatible_candidates.sort(key=lambda x: x[1], reverse=True)
+    return compatible_candidates[0]
+
 def compute_couple_compatibility_score(candidate_embedding, fusion_embeddings, fusion_strategy):
     """
     Compute how well a candidate movie matches the couple's fused taste.
@@ -499,4 +755,31 @@ def recommend_movies_for_couple(person1_movies, person2_movies, target_recommend
     
     st.write(f"✅ Generated {len(final_recommendations)} couple recommendations!")
     
-    return final_recommendations
+    # Generate additional personalized recommendations
+    from tmdbv3api import TMDb
+    tmdb = TMDb()
+
+    # Find Sajal's 6th movie (compatible with Sneha)
+    sajal_movie_title, sajal_score = find_sajal_compatible_movie(
+        person1_features, person2_features, tmdb.api_key
+    )
+
+    # Find Sneha's 7th movie (compatible with Sajal)
+    sneha_movie_title, sneha_score = find_sneha_compatible_movie(
+        person2_features, person1_features, tmdb.api_key
+    )
+
+    # Combine all recommendations
+    extended_recommendations = final_recommendations.copy()
+
+    if sajal_movie_title:
+        explanation = f"{sajal_movie_title} works because of your shared love for {', '.join(list(person1_features['genres'] & person2_features['genres'])[:3])} and brings in Sajal's preferred style while staying Sneha-compatible."
+        extended_recommendations.append((sajal_movie_title, sajal_score, explanation))
+
+    if sneha_movie_title:
+        explanation = f"{sneha_movie_title} works because of your shared love for {', '.join(list(person1_features['genres'] & person2_features['genres'])[:3])} and brings in Sneha's preferred style while staying Sajal-compatible."
+        extended_recommendations.append((sneha_movie_title, sneha_score, explanation))
+
+    st.write(f"✅ Generated {len(extended_recommendations)} total couple recommendations!")
+
+    return extended_recommendations
