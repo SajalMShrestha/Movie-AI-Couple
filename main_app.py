@@ -143,16 +143,14 @@ def display_favorite_movies():
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader(f"🎯 {PERSON1_NAME} Core Favorites")
+        st.subheader(f"🎯 {PERSON1_NAME} Favorites")
         for i, movie in enumerate(PERSON1_MOVIES, 1):
             st.write(f"{i}. **{movie}**")
-        st.write("*+ AI will find a 6th compatible movie*")
     
     with col2:
-        st.subheader(f"💕 {PERSON2_NAME} Core Favorites")
+        st.subheader(f"💕 {PERSON2_NAME} Favorites")
         for i, movie in enumerate(PERSON2_MOVIES, 1):
             st.write(f"{i}. **{movie}**")
-        st.write("*+ AI will find a 7th compatible movie*")
     
     return PERSON1_MOVIES, PERSON2_MOVIES
 
