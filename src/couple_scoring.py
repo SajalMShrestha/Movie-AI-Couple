@@ -666,6 +666,135 @@ def find_critical_darling_discovery(person1_features, person2_features, tmdb_api
     st.write("   ⚠️ No critical darling found meeting compatibility criteria")
     return None, 0
 
+def find_decade_time_machine_movie(person1_features, person2_features, tmdb_api_key):
+    """
+    Find a hidden gem from the decade least represented in their favorites.
+    Focuses on 1990s-2020s, high ratings (7.0+), low popularity (<2K votes), ranks #5-15.
+    
+    Returns:
+        Tuple of (movie_title, score) or (None, 0) if no good match found
+    """
+    st.write("⏰ Finding Decade Time Machine movie...")
+    
+    # Analyze decade representation from both people's favorites
+    all_favorite_years = person1_features['years'] + person2_features['years']
+    
+    decade_counts = {
+        "1990s": 0,
+        "2000s": 0, 
+        "2010s": 0,
+        "2020s": 0
+    }
+    
+    # Count movies per decade
+    for year in all_favorite_years:
+        if 1990 <= year <= 1999:
+            decade_counts["1990s"] += 1
+        elif 2000 <= year <= 2009:
+            decade_counts["2000s"] += 1
+        elif 2010 <= year <= 2019:
+            decade_counts["2010s"] += 1
+        elif 2020 <= year <= 2029:
+            decade_counts["2020s"] += 1
+    
+    st.write(f"   📊 Decade representation: {decade_counts}")
+    
+    # Priority order: least to most represented
+    sorted_decades = sorted(decade_counts.items(), key=lambda x: x[1])
+    decade_priority = [decade for decade, count in sorted_decades]
+    
+    st.write(f"   🎯 Decade priority order: {decade_priority}")
+    
+    # Rating thresholds for fallback
+    rating_thresholds = [7.0, 6.5, 6.0]
+    
+    # Try each decade in priority order
+    for target_decade in decade_priority:
+        st.write(f"   🔍 Searching {target_decade}...")
+        
+        # Set decade year range
+        if target_decade == "1990s":
+            start_year, end_year = 1990, 1999
+        elif target_decade == "2000s":
+            start_year, end_year = 2000, 2009
+        elif target_decade == "2010s":
+            start_year, end_year = 2010, 2019
+        elif target_decade == "2020s":
+            start_year, end_year = 2020, 2029
+        
+        # Try different rating thresholds
+        for min_rating in rating_thresholds:
+            st.write(f"     📈 Trying rating threshold: {min_rating}+")
+            
+            try:
+                # Search for hidden gems from this decade
+                url = f"https://api.themoviedb.org/3/discover/movie"
+                params = {
+                    "api_key": tmdb_api_key,
+                    "primary_release_date.gte": f"{start_year}-01-01",
+                    "primary_release_date.lte": f"{end_year}-12-31",
+                    "sort_by": "vote_average.desc",
+                    "vote_count.gte": 50,      # Minimum for credibility
+                    "vote_count.lte": 2000,    # Maximum for "hidden gem" status
+                    "vote_average.gte": min_rating,
+                    "page": 1
+                }
+                response = requests.get(url, params=params)
+                
+                if response.status_code == 200:
+                    movies = response.json().get("results", [])
+                    
+                    # Skip top 4, get positions 5-15 (index 4-14)
+                    if len(movies) >= 5:
+                        hidden_gems = movies[4:15]  # Positions 5-15
+                        st.write(f"     🎬 Found {len(hidden_gems)} potential hidden gems")
+                        
+                        # Process candidates to find best one
+                        fetch_cache = st.session_state.get('fetch_cache', {})
+                        
+                        for movie_data in hidden_gems:
+                            try:
+                                movie_id = movie_data['id']
+                                movie_title = movie_data.get('title', 'Unknown')
+                                vote_average = movie_data.get('vote_average', 0)
+                                vote_count = movie_data.get('vote_count', 0)
+                                
+                                # Verify it meets our hidden gem criteria
+                                if vote_count > 2000 or vote_average < min_rating:
+                                    continue
+                                
+                                # Get additional details to verify quality
+                                result = fetch_similar_movie_details(movie_id, fetch_cache)
+                                
+                                if result and result[1]:
+                                    movie_details, embedding = result[1]
+                                    overview = getattr(movie_details, 'overview', '')
+                                    
+                                    # Ensure it has a proper plot
+                                    if overview and len(overview.split()) >= 10:
+                                        st.write(f"     ✨ Hidden gem found: {movie_title} ({target_decade}) - Rating: {vote_average:.1f}, Votes: {vote_count}")
+                                        
+                                        # Return with a discovery score based on rating and rarity
+                                        discovery_score = (vote_average / 10) * 0.8 + (1 - min(vote_count / 2000, 1)) * 0.2
+                                        
+                                        st.session_state['fetch_cache'] = fetch_cache
+                                        return movie_title, discovery_score
+                                
+                            except Exception as e:
+                                continue
+                    else:
+                        st.write(f"     ⚠️ Not enough movies found for {target_decade} at {min_rating}+ rating")
+                
+            except Exception as e:
+                st.write(f"     ❌ Error searching {target_decade}: {e}")
+                continue
+        
+        st.write(f"   💫 No hidden gems found for {target_decade}")
+    
+    # If all decades failed
+    st.write("   ⚠️ No decade time machine movie found meeting criteria")
+    return None, 0
+
 def compute_couple_compatibility_score(candidate_embedding, fusion_embeddings, fusion_strategy):
     """
     Compute how well a candidate movie matches the couple's fused taste.
@@ -932,6 +1061,15 @@ def recommend_movies_for_couple(person1_movies, person2_movies, target_recommend
     if critical_darling_title:
         explanation = f"{critical_darling_title} is a critically acclaimed recent gem that bridges both your tastes while introducing you to award-worthy cinema you might have missed."
         extended_recommendations.append((critical_darling_title, critical_darling_score, explanation))
+
+    # Find Decade Time Machine Discovery (9th movie)
+    decade_movie_title, decade_movie_score = find_decade_time_machine_movie(
+        person1_features, person2_features, tmdb_instance.api_key
+    )
+
+    if decade_movie_title:
+        explanation = f"{decade_movie_title} is a hidden gem classic that represents exceptional filmmaking from an era you haven't explored much together - a true time machine discovery."
+        extended_recommendations.append((decade_movie_title, decade_movie_score, explanation))
 
     st.write(f"✅ Generated {len(extended_recommendations)} total couple recommendations!")
 
