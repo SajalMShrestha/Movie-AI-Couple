@@ -488,53 +488,71 @@ def record_feedback(movie_index, movie_title, feedback_type):
 # =============================================================================
 
 def render_movie_carousel():
-    """Render the Netflix-style movie carousel."""
+    """Render the Netflix-style movie carousel using Streamlit columns."""
     if not st.session_state.recommendations:
         st.warning("Loading recommendations...")
         return
     
-    st.markdown('<div class="carousel-container">', unsafe_allow_html=True)
+    st.markdown("### 🎬 Movie Recommendations")
     
-    # Create carousel HTML
-    carousel_html = '<div class="carousel-scroll">'
-    
-    for i, (movie_title, score, explanation) in enumerate(st.session_state.recommendations):
-        poster_url = get_movie_poster_url(movie_title)
-        feedback = st.session_state.feedback_given.get(i, None)
+    # Create two rows of 5 movies each
+    for row in range(2):
+        cols = st.columns(5)
+        start_idx = row * 5
+        end_idx = min(start_idx + 5, len(st.session_state.recommendations))
         
-        # Fallback poster if no URL found
-        poster_img = f'<img src="{poster_url}" class="movie-poster" alt="{movie_title}">' if poster_url else f'<div class="movie-poster" style="background-color: #ddd; display: flex; align-items: center; justify-content: center; color: #666;">No Poster</div>'
+        for col_idx, movie_idx in enumerate(range(start_idx, end_idx)):
+            if movie_idx >= len(st.session_state.recommendations):
+                break
+                
+            movie_title, score, explanation = st.session_state.recommendations[movie_idx]
+            
+            with cols[col_idx]:
+                # Movie poster
+                poster_url = get_movie_poster_url(movie_title)
+                
+                if poster_url:
+                    st.image(poster_url, use_column_width=True)
+                else:
+                    st.markdown(
+                        f'<div style="background-color: #ddd; height: 300px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: #666;">🎬<br>No Poster</div>',
+                        unsafe_allow_html=True
+                    )
+                
+                # Movie title
+                st.markdown(f"**{movie_title}**")
+                
+                # Quick feedback buttons
+                feedback = st.session_state.feedback_given.get(movie_idx, None)
+                
+                button_cols = st.columns(3)
+                
+                with button_cols[0]:
+                    button_type = "primary" if feedback == "Yes" else "secondary"
+                    if st.button("👍", key=f"yes_{movie_idx}", type=button_type):
+                        record_feedback(movie_idx, movie_title, "Yes")
+                        st.rerun()
+                
+                with button_cols[1]:
+                    button_type = "primary" if feedback == "Maybe" else "secondary"
+                    if st.button("🤷", key=f"maybe_{movie_idx}", type=button_type):
+                        record_feedback(movie_idx, movie_title, "Maybe")
+                        st.rerun()
+                
+                with button_cols[2]:
+                    button_type = "primary" if feedback == "No" else "secondary"
+                    if st.button("👎", key=f"no_{movie_idx}", type=button_type):
+                        record_feedback(movie_idx, movie_title, "No")
+                        st.rerun()
+                
+                # Show detailed view button
+                if st.button("ℹ️ Details", key=f"details_{movie_idx}"):
+                    st.session_state.selected_movie = movie_idx
+                    st.rerun()
         
-        carousel_html += f'''
-        <div class="movie-card" onclick="selectMovie({i})">
-            {poster_img}
-            <div class="movie-title">{movie_title}</div>
-            <div class="quick-feedback">
-                <button class="feedback-btn {'selected' if feedback == 'Yes' else ''}" onclick="quickFeedback({i}, 'Yes'); event.stopPropagation();">👍</button>
-                <button class="feedback-btn {'selected' if feedback == 'Maybe' else ''}" onclick="quickFeedback({i}, 'Maybe'); event.stopPropagation();">🤷</button>
-                <button class="feedback-btn {'selected' if feedback == 'No' else ''}" onclick="quickFeedback({i}, 'No'); event.stopPropagation();">👎</button>
-            </div>
-        </div>
-        '''
-    
-    carousel_html += '</div></div>'
-    
-    # Add JavaScript for interactivity
-    carousel_html += '''
-    <script>
-    function selectMovie(index) {
-        const movieData = ''' + str([(title, explanation) for title, _, explanation in st.session_state.recommendations]).replace("'", '"') + ''';
-        window.parent.postMessage({type: 'selectMovie', index: index, data: movieData[index]}, '*');
-    }
-    
-    function quickFeedback(index, feedback) {
-        window.parent.postMessage({type: 'quickFeedback', index: index, feedback: feedback}, '*');
-    }
-    </script>
-    '''
-    
-    st.markdown(carousel_html, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+        # Add some spacing between rows
+        if row == 0:
+            st.markdown("<br>", unsafe_allow_html=True)
 
 def render_movie_details(movie_index):
     """Render expanded movie details."""
