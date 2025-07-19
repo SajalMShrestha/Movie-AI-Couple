@@ -36,15 +36,15 @@ def build_custom_candidate_pool(favorite_genre_ids, favorite_cast_ids, favorite_
         Set of candidate movie IDs
     """
     # ADD DEBUG AT THE START
-    st.write(f"🔍 Building candidate pool with:")
-    st.write(f"   - Genres: {len(favorite_genre_ids)} items")
-    st.write(f"   - Cast: {len(favorite_cast_ids)} items") 
-    st.write(f"   - Directors: {len(favorite_director_ids)} items")
-    st.write(f"   - Years: {favorite_years}")
+    # st.write(f"🔍 Building candidate pool with:")
+    # st.write(f"   - Genres: {len(favorite_genre_ids)} items")
+    # st.write(f"   - Cast: {len(favorite_cast_ids)} items") 
+    # st.write(f"   - Directors: {len(favorite_director_ids)} items")
+    # st.write(f"   - Years: {favorite_years}")
     candidate_movie_ids = set()
     
     # Strategy 1: Discover by Genre (40-60 movies)
-    st.write("🎭 Trying genre discovery...")
+    # st.write("🎭 Trying genre discovery...")
     for genre_id in list(favorite_genre_ids)[:3]:
         try:
             url = f"https://api.themoviedb.org/3/discover/movie"
@@ -59,9 +59,10 @@ def build_custom_candidate_pool(favorite_genre_ids, favorite_cast_ids, favorite_
             if response.status_code == 200:
                 movies = response.json().get("results", [])
                 candidate_movie_ids.update([m["id"] for m in movies[:20]])
-                st.write(f"   Found {len(movies)} movies for genre {genre_id}")
+                # st.write(f"   Found {len(movies)} movies for genre {genre_id}")
             else:
-                st.write(f"   API error for genre {genre_id}: {response.status_code}")
+                pass
+                # st.write(f"   API error for genre {genre_id}: {response.status_code}")
         except Exception as e:
             st.warning(f"Error discovering by genre {genre_id}: {e}")
     
@@ -179,7 +180,7 @@ def build_custom_candidate_pool(favorite_genre_ids, favorite_cast_ids, favorite_
             st.warning(f"Error getting high-rated movies for genre {genre_id}: {e}")
     
     # ADD AT THE END
-    st.write(f"🎬 Total candidates found: {len(candidate_movie_ids)}")
+    # st.write(f"🎬 Total candidates found: {len(candidate_movie_ids)}")
     return candidate_movie_ids
 
 def identify_taste_clusters(favorite_embeddings, favorite_movies_info):
@@ -446,7 +447,7 @@ def recommend_movies(favorite_titles):
     
     if cache_key in st.session_state.recommendation_cache:
         cached_result = st.session_state.recommendation_cache[cache_key]
-        st.write(f"✅ Using cached results")
+        # st.write(f"✅ Using cached results")
         return cached_result
     
     # Initialize collections
@@ -474,12 +475,12 @@ def recommend_movies(favorite_titles):
                 valid_movies_found.append((title, search_result[0]))
             else:
                 # Try fuzzy search for this title
-                st.write(f"🔍 Trying fuzzy search for '{title}'...")
+                # st.write(f"🔍 Trying fuzzy search for '{title}'...")
                 fuzzy_results = fuzzy_search_movies(title, max_results=3, similarity_threshold=0.7)
                 
                 if fuzzy_results:
                     best_match = fuzzy_results[0]
-                    st.write(f"📝 Using '{best_match['title']}' as match for '{title}' ({best_match['similarity']:.0%} similarity)")
+                    # st.write(f"📝 Using '{best_match['title']}' as match for '{title}' ({best_match['similarity']:.0%} similarity)")
                     
                     corrected_search = movie_api.search(best_match['title'])
                     if corrected_search:
