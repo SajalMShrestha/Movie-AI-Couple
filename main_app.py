@@ -512,7 +512,7 @@ def render_movie_carousel():
                 poster_url = get_movie_poster_url(movie_title)
                 
                 if poster_url:
-                    st.image(poster_url, use_column_width=True)
+                    st.image(poster_url, use_container_width=True)
                 else:
                     st.markdown(
                         f'<div style="background-color: #ddd; height: 300px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: #666;">🎬<br>No Poster</div>',
