@@ -736,4 +736,498 @@ def find_decade_time_machine_movie(person1_features, person2_features, tmdb_api_
                 params = {
                     "api_key": tmdb_api_key,
                     "primary_release_date.gte": f"{start_year}-01-01",
-                    "primary_release_date.lte": f"{end_year}-12-31
+                    "primary_release_date.lte": f"{end_year}-12-31",
+                    "sort_by": "vote_average.desc",
+                    "vote_count.gte": 50,      # Minimum for credibility
+                    "vote_count.lte": 2000,    # Maximum for "hidden gem" status
+                    "vote_average.gte": min_rating,
+                    "page": 1
+                }
+                response = requests.get(url, params=params)
+                
+                if response.status_code == 200:
+                    movies = response.json().get("results", [])
+                    
+                    # Skip top 4, get positions 5-15 (index 4-14)
+                    if len(movies) >= 5:
+                        hidden_gems = movies[4:15]  # Positions 5-15
+                        # st.write(f"     🎬 Found {len(hidden_gems)} potential hidden gems")
+                        
+                        # Process candidates to find best one
+                        fetch_cache = st.session_state.get('fetch_cache', {})
+                        
+                        for movie_data in hidden_gems:
+                            try:
+                                movie_id = movie_data['id']
+                                movie_title = movie_data.get('title', 'Unknown')
+                                vote_average = movie_data.get('vote_average', 0)
+                                vote_count = movie_data.get('vote_count', 0)
+                                
+                                # Verify it meets our hidden gem criteria
+                                if vote_count > 2000 or vote_average < min_rating:
+                                    continue
+                                
+                                # Get additional details to verify quality
+                                result = fetch_similar_movie_details(movie_id, fetch_cache)
+                                
+                                if result and result[1]:
+                                    movie_details, embedding = result[1]
+                                    overview = getattr(movie_details, 'overview', '')
+                                    
+                                    # Ensure it has a proper plot
+                                    if overview and len(overview.split()) >= 10:
+                                        # st.write(f"     ✨ Hidden gem found: {movie_title} ({target_decade}) - Rating: {vote_average:.1f}, Votes: {vote_count}")
+                                        
+                                        # Return with a discovery score based on rating and rarity
+                                        discovery_score = (vote_average / 10) * 0.8 + (1 - min(vote_count / 2000, 1)) * 0.2
+                                        
+                                        st.session_state['fetch_cache'] = fetch_cache
+                                        return movie_title, discovery_score
+                                
+                            except Exception as e:
+                                continue
+                    else:
+                        pass
+                        # st.write(f"     ⚠️ Not enough movies found for {target_decade} at {min_rating}+ rating")
+                
+            except Exception as e:
+                # st.write(f"     ❌ Error searching {target_decade}: {e}")
+                continue
+        
+        # st.write(f"   💫 No hidden gems found for {target_decade}")
+    
+    # If all decades failed
+    # st.write("   ⚠️ No decade time machine movie found meeting criteria")
+    return None, 0
+
+def find_international_cinema_movie(person1_features, person2_features, tmdb_api_key):
+    """
+    Find a highly-rated international (non-US) film that matches their dominant genres.
+    Focuses on foreign cinema with universal themes and high quality.
+    
+    Returns:
+        Tuple of (movie_title, score) or (None, 0) if no good match found
+    """
+    # st.write("🌍 Finding International Cinema movie...")
+    
+    # Analyze genre preferences from both people's favorites
+    combined_genres = person1_features['genres'] | person2_features['genres']
+    
+    # Count genre appearances across all movies
+    genre_counts = {}
+    all_movies_info = person1_features['movies_info'] + person2_features['movies_info']
+    
+    for movie_info in all_movies_info:
+        for genre in movie_info.get('genres', []):
+            genre_counts[genre] = genre_counts.get(genre, 0) + 1
+    
+    # Sort genres by frequency (most dominant first)
+    sorted_genres = sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)
+    
+    # st.write(f"   📊 Genre analysis: {dict(sorted_genres)}")
+    # st.write(f"   🎯 Will try genres in order: {[genre for genre, count in sorted_genres]}")
+    
+    # Map genre names to TMDB genre IDs
+    genre_id_map = {
+        "Action": 28, "Adventure": 12, "Animation": 16, "Comedy": 35, "Crime": 80,
+        "Documentary": 99, "Drama": 18, "Family": 10751, "Fantasy": 14, "History": 36,
+        "Horror": 27, "Music": 10402, "Mystery": 9648, "Romance": 10749, "Science Fiction": 878,
+        "TV Movie": 10770, "Thriller": 53, "War": 10752, "Western": 37
+    }
+    
+    # Try each genre in order of dominance
+    for genre_name, count in sorted_genres:
+        # st.write(f"   🔍 Searching for international {genre_name} films...")
+        
+        genre_id = genre_id_map.get(genre_name)
+        if not genre_id:
+            # st.write(f"     ⚠️ No genre ID found for {genre_name}")
+            continue
+        
+        try:
+            # Search for international films in this genre
+            url = f"https://api.themoviedb.org/3/discover/movie"
+            params = {
+                "api_key": tmdb_api_key,
+                "with_genres": str(genre_id),
+                "sort_by": "vote_average.desc",
+                "vote_average.gte": 7.5,
+                "vote_count.gte": 200,  # Ensure some credibility
+                "with_original_language": "!en|en",  # Include both non-English and English
+                "page": 1
+            }
+            
+            response = requests.get(url, params=params)
+            
+            if response.status_code == 200:
+                movies = response.json().get("results", [])
+                # st.write(f"     🎬 Found {len(movies)} potential international films")
+                
+                # Filter out US-made films and find best international option
+                fetch_cache = st.session_state.get('fetch_cache', {})
+                
+                for movie_data in movies[:30]:  # Check top 30 for speed
+                    try:
+                        movie_id = movie_data['id']
+                        movie_title = movie_data.get('title', 'Unknown')
+                        vote_average = movie_data.get('vote_average', 0)
+                        vote_count = movie_data.get('vote_count', 0)
+                        original_language = movie_data.get('original_language', '')
+                        
+                        # Get detailed movie info to check production country
+                        result = fetch_similar_movie_details(movie_id, fetch_cache)
+                        
+                        if result and result[1]:
+                            movie_details, embedding = result[1]
+                            
+                            # Check production countries to exclude US films
+                            production_countries = getattr(movie_details, 'production_countries', [])
+                            is_us_film = False
+                            
+                            if production_countries:
+                                for country in production_countries:
+                                    if isinstance(country, dict):
+                                        country_code = country.get('iso_3166_1', '')
+                                    else:
+                                        country_code = getattr(country, 'iso_3166_1', '')
+                                    
+                                    if country_code == 'US':
+                                        is_us_film = True
+                                        break
+                            
+                            # Skip US films - we want international cinema
+                            if is_us_film:
+                                continue
+                            
+                            # Verify it meets our quality criteria
+                            if vote_average >= 7.5:
+                                overview = getattr(movie_details, 'overview', '')
+                                
+                                # Ensure it has a proper plot
+                                if overview and len(overview.split()) >= 10:
+                                    # Determine country/region for display
+                                    origin_info = ""
+                                    if production_countries:
+                                        country_names = []
+                                        for country in production_countries[:2]:  # Show max 2 countries
+                                            if isinstance(country, dict):
+                                                name = country.get('name', '')
+                                            else:
+                                                name = getattr(country, 'name', '')
+                                            if name:
+                                                country_names.append(name)
+                                        if country_names:
+                                            origin_info = f" ({', '.join(country_names)})"
+                                    
+                                    # st.write(f"     ✨ International gem found: {movie_title}{origin_info} - Rating: {vote_average:.1f}, Language: {original_language}")
+                                    
+                                    # Calculate discovery score based on rating and international appeal
+                                    discovery_score = (vote_average / 10) * 0.9 + 0.1  # Slight bonus for international films
+                                    
+                                    st.session_state['fetch_cache'] = fetch_cache
+                                    return movie_title, discovery_score
+                        
+                    except Exception as e:
+                        continue
+                
+                # st.write(f"     💫 No suitable international {genre_name} films found")
+            
+            else:
+                pass
+                # st.write(f"     ❌ API error for {genre_name}: {response.status_code}")
+        
+        except Exception as e:
+            # st.write(f"     ❌ Error searching {genre_name}: {e}")
+            continue
+    
+    # If all genres failed
+    # st.write("   ⚠️ No international cinema movie found meeting criteria")
+    return None, 0
+
+def compute_couple_compatibility_score(candidate_embedding, fusion_embeddings, fusion_strategy):
+    """
+    Compute how well a candidate movie matches the couple's fused taste.
+    
+    Args:
+        candidate_embedding: Embedding of candidate movie
+        fusion_embeddings: List of fusion embeddings from clustering
+        fusion_strategy: Strategy used for fusion
+    
+    Returns:
+        Float compatibility score
+    """
+    if not fusion_embeddings:
+        return 0.0
+    
+    if fusion_strategy == 'simple_average':
+        return float(cos_sim(candidate_embedding, fusion_embeddings[0]))
+    
+    elif fusion_strategy == 'overlap_centers':
+        max_similarity = 0.0
+        for fusion_emb in fusion_embeddings:
+            similarity = float(cos_sim(candidate_embedding, fusion_emb))
+            max_similarity = max(max_similarity, similarity)
+        return max_similarity
+    
+    elif fusion_strategy == 'bridge_clusters':
+        return float(cos_sim(candidate_embedding, fusion_embeddings[0]))
+    
+    else:
+        total_similarity = 0.0
+        for fusion_emb in fusion_embeddings:
+            total_similarity += float(cos_sim(candidate_embedding, fusion_emb))
+        return total_similarity / len(fusion_embeddings)
+
+def generate_couple_explanation(movie_title, person1_features, person2_features, clustering_results):
+    """
+    Generate an explanation for why this movie is recommended for the couple.
+    
+    Args:
+        movie_title: Title of recommended movie
+        person1_features: Person 1's taste features
+        person2_features: Person 2's taste features  
+        clustering_results: Results from taste clustering
+    
+    Returns:
+        String explanation
+    """
+    # Find genre overlaps
+    genre_overlap = person1_features['genres'] & person2_features['genres']
+    
+    # Find actor/director overlaps
+    people_overlap = (person1_features['actors'] | person1_features['directors']) & \
+                    (person2_features['actors'] | person2_features['directors'])
+    
+    explanation_parts = []
+    
+    if clustering_results['taste_overlap'] > 0.3:
+        explanation_parts.append(f"Strong taste alignment ({clustering_results['taste_overlap']:.0%} overlap)")
+    
+    if genre_overlap:
+        genres_str = ', '.join(list(genre_overlap)[:3])
+        explanation_parts.append(f"shared love for {genres_str}")
+    
+    if people_overlap:
+        people_str = ', '.join(list(people_overlap)[:2])
+        explanation_parts.append(f"mutual appreciation for {people_str}")
+    
+    strategy_explanations = {
+        'overlap_centers': "Perfect fusion of both your tastes",
+        'bridge_clusters': "Bridges your different preferences beautifully",
+        'simple_average': "Balanced appeal to both your preferences"
+    }
+    
+    strategy_text = strategy_explanations.get(clustering_results['fusion_strategy'], "Great match for both")
+    explanation_parts.append(strategy_text)
+    
+    if not explanation_parts:
+        return "This movie offers a good balance that should appeal to both of you."
+    
+    return f"{movie_title} works because of your " + " and ".join(explanation_parts) + "."
+
+def recommend_movies_for_couple(person1_movies, person2_movies, target_recommendations=5):
+    """
+    Main function to generate couple movie recommendations using K-Means clustering.
+    
+    Args:
+        person1_movies: List of person 1's favorite movie titles
+        person2_movies: List of person 2's favorite movie titles
+        target_recommendations: Number of recommendations to return
+    
+    Returns:
+        List of tuples (movie_title, score, explanation)
+    """
+    # st.write("🎭 **Starting Couples Movie Recommendation Process**")
+    
+    # Extract features for both people
+    # st.write("👤 Analyzing Person 1's taste...")
+    person1_features = extract_movie_features(person1_movies)
+    
+    # st.write("👤 Analyzing Person 2's taste...")
+    person2_features = extract_movie_features(person2_movies)
+
+    # Perform taste clustering
+    clustering_results = perform_taste_clustering(person1_features, person2_features)
+    
+    # Build candidate pool using combined preferences
+    # st.write("🔍 Building couple candidate pool...")
+    combined_genre_ids = person1_features['genre_ids'] | person2_features['genre_ids']
+    combined_cast_ids = person1_features['cast_ids'] | person2_features['cast_ids']
+    combined_director_ids = person1_features['director_ids'] | person2_features['director_ids']
+    combined_years = person1_features['years'] + person2_features['years']
+    
+    tmdb = TMDb()
+    candidate_movie_ids = build_custom_candidate_pool(  # ✅ Correct function name
+        combined_genre_ids, combined_cast_ids, combined_director_ids,
+        combined_years, tmdb.api_key
+    )
+    
+    # Exclude movies already in their favorites
+    all_favorite_titles = set([m.lower() for m in person1_movies + person2_movies])
+    
+    # Fetch candidate details
+    candidate_movies = {}
+    fetch_cache = st.session_state.get('fetch_cache', {})
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(fetch_similar_movie_details, mid, fetch_cache): mid 
+                  for mid in list(candidate_movie_ids)[:100]}
+        
+        for fut in concurrent.futures.as_completed(futures):
+            try:
+                result = fut.result()
+                # st.write(f"🔍 Processing result: {result is not None}")
+                
+                if result is None:
+                    # st.write("❌ Result is None")
+                    continue
+                if result[1] is None:
+                    # st.write("❌ Result[1] (payload) is None") 
+                    continue
+                    
+                mid, payload = result
+                # st.write(f"✅ Got movie ID: {mid}")
+                
+                m, embedding = payload
+                if m is None:
+                    # st.write("❌ Movie object is None")
+                    continue
+                if embedding is None:
+                    # st.write("❌ Embedding is None")
+                    continue
+                    
+                movie_title = getattr(m, 'title', 'Unknown')
+                vote_count = getattr(m, 'vote_count', 0)
+                # st.write(f"🎬 Movie: {movie_title}, Votes: {vote_count}")
+                
+                # Skip if in favorites
+                if movie_title.lower() in all_favorite_titles:
+                    # st.write(f"⚠️ Skipped {movie_title} - already in favorites")
+                    continue
+                    
+                if vote_count < 30:
+                    # st.write(f"⚠️ Skipped {movie_title} - low vote count ({vote_count})")
+                    continue
+                    
+                # st.write(f"✅ Added to candidates: {movie_title}")
+                candidate_movies[mid] = (m, embedding)
+            except Exception as e:
+                continue
+    
+    st.session_state['fetch_cache'] = fetch_cache
+    
+    if not candidate_movies:
+        st.warning("No suitable candidate movies found!")
+        return []
+    
+    # st.write(f"🎬 Scoring {len(candidate_movies)} candidate movies...")
+    
+    # Score candidates with couple-specific logic
+    scored_candidates = []
+    
+    for movie_obj, embedding in candidate_movies.values():
+        try:
+            # Compute couple compatibility score
+            couple_score = compute_couple_compatibility_score(
+                embedding, clustering_results['fusion_embeddings'], clustering_results['fusion_strategy']
+            )
+            
+            # Get traditional metrics
+            vote_average = getattr(movie_obj, 'vote_average', 0) or 0
+            vote_count = getattr(movie_obj, 'vote_count', 0) or 0
+            
+            # Combined scoring
+            final_score = (
+                couple_score * 0.6 +           # Primary couple compatibility  
+                (vote_average / 10) * 0.25 +   # Quality score
+                min(vote_count / 1000, 1) * 0.15  # Popularity boost
+            )
+            
+            # Generate explanation
+            movie_title = getattr(movie_obj, 'title', 'Unknown')
+            explanation = generate_couple_explanation(
+                movie_title, person1_features, person2_features, clustering_results
+            )
+            
+            scored_candidates.append((movie_title, final_score, explanation))
+            
+        except Exception as e:
+            continue
+    
+    scored_candidates.sort(key=lambda x: x[1], reverse=True)
+    
+    # Apply diversity filtering
+    final_recommendations = []
+    used_words = set()
+    
+    for title, score, explanation in scored_candidates:
+        # Simple diversity check - avoid too many movies with same key words
+        title_words = set(title.lower().split())
+        if len(title_words & used_words) > 1 and len(final_recommendations) >= 2:
+            continue
+        
+        final_recommendations.append((title, score, explanation))
+        used_words.update(title_words)
+        
+        if len(final_recommendations) >= target_recommendations:
+            break
+    
+    # st.write(f"✅ Generated {len(final_recommendations)} couple recommendations!")
+    
+    # Generate additional personalized recommendations
+    from tmdbv3api import TMDb as TMDbAPI
+    tmdb_instance = TMDbAPI()
+
+    # Find Sajal's 6th movie (compatible with Sneha)
+    sajal_movie_title, sajal_score = find_sajal_compatible_movie(
+        person1_features, person2_features, tmdb_instance.api_key
+    )
+
+    # Find Sneha's 7th movie (compatible with Sajal)
+    sneha_movie_title, sneha_score = find_sneha_compatible_movie(
+        person2_features, person1_features, tmdb_instance.api_key
+    )
+
+    # Combine all recommendations
+    extended_recommendations = final_recommendations.copy()
+
+    if sajal_movie_title:
+        explanation = f"{sajal_movie_title} works because of your shared love for {', '.join(list(person1_features['genres'] & person2_features['genres'])[:3])} and brings in Sajal's preferred style while staying Sneha-compatible."
+        extended_recommendations.append((sajal_movie_title, sajal_score, explanation))
+
+    if sneha_movie_title:
+        explanation = f"{sneha_movie_title} works because of your shared love for {', '.join(list(person1_features['genres'] & person2_features['genres'])[:3])} and brings in Sneha's preferred style while staying Sajal-compatible."
+        extended_recommendations.append((sneha_movie_title, sneha_score, explanation))
+
+    # Find Critical Darling Discovery (8th movie)
+    # st.write("🔍 About to search for Critical Darling...")
+    critical_darling_title, critical_darling_score = find_critical_darling_discovery(
+        person1_features, person2_features, tmdb_instance.api_key
+    )
+    # st.write(f"🔍 Critical Darling result: {critical_darling_title}, {critical_darling_score}")
+
+    if critical_darling_title:
+        explanation = f"{critical_darling_title} is a critically acclaimed recent gem that bridges both your tastes while introducing you to award-worthy cinema you might have missed."
+        extended_recommendations.append((critical_darling_title, critical_darling_score, explanation))
+
+    # Find Decade Time Machine Discovery (9th movie)
+    decade_movie_title, decade_movie_score = find_decade_time_machine_movie(
+        person1_features, person2_features, tmdb_instance.api_key
+    )
+
+    if decade_movie_title:
+        explanation = f"{decade_movie_title} is a hidden gem classic that represents exceptional filmmaking from an era you haven't explored much together - a true time machine discovery."
+        extended_recommendations.append((decade_movie_title, decade_movie_score, explanation))
+
+    # Find International Cinema Discovery (10th movie)
+    international_movie_title, international_movie_score = find_international_cinema_movie(
+        person1_features, person2_features, tmdb_instance.api_key
+    )
+
+    if international_movie_title:
+        explanation = f"{international_movie_title} is an exceptional international film that showcases world-class cinema while matching your taste preferences - a perfect window into global storytelling."
+        extended_recommendations.append((international_movie_title, international_movie_score, explanation))
+
+    # st.write(f"✅ Generated {len(extended_recommendations)} total couple recommendations!")
+
+    return extended_recommendations
