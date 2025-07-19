@@ -672,7 +672,7 @@ def main():
         render_movie_carousel()
         
         # Handle movie selection via URL params or session state
-        query_params = st.experimental_get_query_params()
+        query_params = st.query_params
         selected_index = query_params.get('movie', [None])[0]
         
         if selected_index is not None:
