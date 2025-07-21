@@ -593,7 +593,7 @@ def render_movie_carousel():
                 
                 # Show detailed view button
                 if st.button("ℹ️ Details", key=f"details_{movie_idx}"):
-                    st.query_params['modal'] = str(movie_idx)
+                    st.session_state.selected_movie = movie_idx  # Set session state directly
                     st.rerun()
         
         # Add some spacing between rows
@@ -930,7 +930,7 @@ def main():
     if st.session_state.feedback_submitted:
         render_thank_you()
     else:
-        # Show modal if movie is selected
+        # Check if modal should be shown (selected_movie is not None)
         if st.session_state.get('selected_movie') is not None:
             render_movie_modal()
         else:
