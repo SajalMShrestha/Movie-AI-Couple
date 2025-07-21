@@ -700,7 +700,7 @@ def render_thank_you():
     ''', unsafe_allow_html=True)
 
 def render_movie_modal():
-    """Render the Netflix-style modal for movie details."""
+    """Render the Netflix-style modal using Streamlit native components."""
     if st.session_state.get('selected_movie') is None:
         return
     
@@ -710,149 +710,193 @@ def render_movie_modal():
     
     movie_title, score, explanation = st.session_state.recommendations[movie_idx]
     
-    # Get movie details
-    details = get_movie_details(movie_title)
-    poster_url = get_movie_poster_url(movie_title)
+    # Create modal background overlay with CSS
+    st.markdown("""
+    <style>
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(5px);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        box-sizing: border-box;
+    }
     
-    # Get feedback status
-    feedback = st.session_state.feedback_given.get(movie_idx, None)
+    .modal-container {
+        background: #141414;
+        border-radius: 12px;
+        width: 90vw;
+        max-width: 900px;
+        max-height: 90vh;
+        overflow-y: auto;
+        color: white;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+        position: relative;
+    }
     
-    # Create modal HTML
-    modal_html = f'''
-    <div class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <!-- Close Button -->
-            <button class="modal-close" onclick="closeModal()">×</button>
-            
-            <!-- Navigation Arrows -->
-            <button class="nav-arrow prev" onclick="navigateMovie({movie_idx}, 'prev')">‹</button>
-            <button class="nav-arrow next" onclick="navigateMovie({movie_idx}, 'next')">›</button>
-            
-            <!-- Modal Body -->
-            <div class="modal-body">
-                <div class="modal-poster">
-                    {"<img src='" + poster_url + "' alt='" + movie_title + "'>" if poster_url else "<div style='background:#333; height:450px; display:flex; align-items:center; justify-content:center; border-radius:8px; color:#999;'>🎬<br>No Poster</div>"}
+    .modal-header-custom {
+        padding: 1rem 2rem;
+        border-bottom: 1px solid #333;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .modal-nav {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Create the modal using Streamlit container
+    with st.container():
+        st.markdown('<div class="modal-backdrop">', unsafe_allow_html=True)
+        st.markdown('<div class="modal-container">', unsafe_allow_html=True)
+        
+        # Modal Header with navigation
+        col1, col2, col3, col4, col5 = st.columns([1, 1, 3, 1, 1])
+        
+        with col1:
+            if st.button("\u25C0 Prev", key="modal_prev", help="Previous movie"):
+                current_idx = st.session_state.selected_movie
+                total_movies = len(st.session_state.recommendations)
+                new_idx = current_idx - 1 if current_idx > 0 else total_movies - 1
+                st.session_state.selected_movie = new_idx
+                st.rerun()
+        
+        with col2:
+            if st.button("Next \u25B6", key="modal_next", help="Next movie"):
+                current_idx = st.session_state.selected_movie
+                total_movies = len(st.session_state.recommendations)
+                new_idx = current_idx + 1 if current_idx < total_movies - 1 else 0
+                st.session_state.selected_movie = new_idx
+                st.rerun()
+        
+        with col3:
+            st.markdown(f"<h2 style='text-align: center; color: white; margin: 0;'>Movie {movie_idx + 1} of {len(st.session_state.recommendations)}</h2>", 
+                       unsafe_allow_html=True)
+        
+        with col5:
+            if st.button("\u2715 Close", key="modal_close", help="Close modal"):
+                st.session_state.selected_movie = None
+                st.rerun()
+        
+        st.markdown("---")
+        
+        # Modal Body
+        col_poster, col_details = st.columns([1, 2])
+        
+        with col_poster:
+            # Movie poster
+            poster_url = get_movie_poster_url(movie_title)
+            if poster_url:
+                st.image(poster_url, width=300)
+            else:
+                st.markdown("""
+                <div style='background: #333; height: 450px; display: flex; align-items: center; 
+                           justify-content: center; border-radius: 8px; color: #999; font-size: 2rem;'>
+                    🎬<br><span style='font-size: 1rem;'>No Poster</span>
                 </div>
+                """, unsafe_allow_html=True)
+        
+        with col_details:
+            # Movie title
+            st.markdown(f"<h1 style='color: white; font-size: 2rem; margin-bottom: 1rem;'>{movie_title}</h1>", 
+                       unsafe_allow_html=True)
+            
+            # Why we recommend this
+            st.markdown("**🎯 Why we recommend this:**")
+            st.write(explanation)
+            
+            # Get and display movie details
+            details = get_movie_details(movie_title)
+            
+            if details:
+                # Plot summary
+                if details.get('overview'):
+                    st.markdown("**📖 Plot:**")
+                    st.write(details['overview'])
                 
-                <div class="modal-details">
-                    <h1 class="modal-title">{movie_title}</h1>
+                # Genres
+                if details.get('genres'):
+                    st.markdown("**🎭 Genres:**")
+                    genres_text = " • ".join(details['genres'])
+                    st.markdown(f"<span style='color: #e50914; font-weight: bold;'>{genres_text}</span>", 
+                               unsafe_allow_html=True)
+                
+                # Try to get cast and director
+                try:
+                    from tmdbv3api import Movie
+                    movie_api = Movie()
+                    search_result = movie_api.search(movie_title)
                     
-                    <div class="modal-section">
-                        <span class="modal-label">🎯 Why we recommend this:</span>
-                        <div class="modal-text">{explanation}</div>
-                    </div>
-    '''
-    
-    # Add plot summary if available
-    if details and details.get('overview'):
-        modal_html += f'''
-                    <div class="modal-section">
-                        <span class="modal-label">📖 Plot:</span>
-                        <div class="modal-text">{details['overview']}</div>
-                    </div>
-        '''
-    
-    # Add genres if available
-    if details and details.get('genres'):
-        genres_html = ''.join([f'<span class="genre-tag">{genre}</span>' for genre in details['genres']])
-        modal_html += f'''
-                    <div class="modal-section">
-                        <span class="modal-label">🎭 Genres:</span>
-                        <div class="modal-genres">{genres_html}</div>
-                    </div>
-        '''
-    
-    # Add cast and director if available (using TMDB API)
-    try:
-        from tmdbv3api import Movie
-        movie_api = Movie()
-        search_result = movie_api.search(movie_title)
-        if search_result:
-            credits = movie_api.credits(search_result[0].id)
+                    if search_result:
+                        credits = movie_api.credits(search_result[0].id)
+                        
+                        # Cast (top 3)
+                        if hasattr(credits, 'cast') and credits.cast:
+                            cast_names = []
+                            for actor in credits.cast[:3]:
+                                if hasattr(actor, 'name'):
+                                    cast_names.append(actor.name)
+                            
+                            if cast_names:
+                                st.markdown("**🎭 Starring:**")
+                                st.write(", ".join(cast_names))
+                        
+                        # Director
+                        if hasattr(credits, 'crew') and credits.crew:
+                            directors = []
+                            for person in credits.crew:
+                                if hasattr(person, 'job') and person.job == 'Director' and hasattr(person, 'name'):
+                                    directors.append(person.name)
+                            
+                            if directors:
+                                st.markdown("**🎬 Director:**")
+                                st.write(directors[0])
+                
+                except Exception as e:
+                    pass  # Skip cast/director if API call fails
             
-            # Get cast (top 3)
-            cast_list = credits.cast[:3] if hasattr(credits, 'cast') and credits.cast else []
-            if cast_list:
-                cast_names = [getattr(actor, 'name', '') for actor in cast_list if hasattr(actor, 'name')]
-                if cast_names:
-                    modal_html += f'''
-                    <div class="modal-section">
-                        <span class="modal-label">🎭 Starring:</span>
-                        <div class="modal-text">{', '.join(cast_names)}</div>
-                    </div>
-                    '''
+            # Feedback Section
+            st.markdown("---")
+            st.markdown("**Would you both watch this movie together?**")
             
-            # Get director
-            crew_list = credits.crew if hasattr(credits, 'crew') and credits.crew else []
-            directors = [getattr(person, 'name', '') for person in crew_list if getattr(person, 'job', '') == 'Director']
-            if directors:
-                modal_html += f'''
-                    <div class="modal-section">
-                        <span class="modal-label">🎬 Director:</span>
-                        <div class="modal-text">{directors[0]}</div>
-                    </div>
-                '''
-    except:
-        pass
-    
-    # Add feedback section
-    modal_html += f'''
-                    <div class="modal-section">
-                        <span class="modal-label">Would you both watch this movie together?</span>
-                        <div class="modal-feedback">
-                            <button class="modal-feedback-btn btn-yes {'selected' if feedback == 'Yes' else ''}" 
-                                    onclick="giveFeedback({movie_idx}, 'Yes')">👍 Yes!</button>
-                            <button class="modal-feedback-btn btn-maybe {'selected' if feedback == 'Maybe' else ''}" 
-                                    onclick="giveFeedback({movie_idx}, 'Maybe')">🤷 Maybe</button>
-                            <button class="modal-feedback-btn btn-no {'selected' if feedback == 'No' else ''}" 
-                                    onclick="giveFeedback({movie_idx}, 'No')">👎 No</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <script>
-        function closeModal(event) {{
-            // Close if clicking outside modal content or on close button
-            if (!event || event.target.classList.contains('modal-overlay') || event.target.classList.contains('modal-close')) {{
-                window.parent.postMessage({{type: 'closeModal'}}, '*');
-            }}
-        }}
+            feedback = st.session_state.feedback_given.get(movie_idx, None)
+            
+            # Feedback buttons
+            col_yes, col_maybe, col_no = st.columns(3)
+            
+            with col_yes:
+                button_type = "primary" if feedback == "Yes" else "secondary"
+                if st.button("👍 Yes!", key=f"modal_yes_{movie_idx}", type=button_type):
+                    record_feedback(movie_idx, movie_title, "Yes")
+                    st.success("✅ Marked as 'Yes'!")
+                    st.balloons()  # Celebratory balloons for positive feedback
+            
+            with col_maybe:
+                button_type = "primary" if feedback == "Maybe" else "secondary"
+                if st.button("🤷 Maybe", key=f"modal_maybe_{movie_idx}", type=button_type):
+                    record_feedback(movie_idx, movie_title, "Maybe")
+                    st.success("✅ Marked as 'Maybe'!")
+            
+            with col_no:
+                button_type = "primary" if feedback == "No" else "secondary"
+                if st.button("👎 No", key=f"modal_no_{movie_idx}", type=button_type):
+                    record_feedback(movie_idx, movie_title, "No")
+                    st.success("✅ Marked as 'No'!")
         
-        function navigateMovie(currentIdx, direction) {{
-            const totalMovies = {len(st.session_state.recommendations)};
-            let newIdx;
-            
-            if (direction === 'prev') {{
-                newIdx = currentIdx > 0 ? currentIdx - 1 : totalMovies - 1;
-            }} else {{
-                newIdx = currentIdx < totalMovies - 1 ? currentIdx + 1 : 0;
-            }}
-            
-            window.parent.postMessage({{type: 'navigateMovie', index: newIdx}}, '*');
-        }}
-        
-        function giveFeedback(movieIdx, feedback) {{
-            window.parent.postMessage({{type: 'giveFeedback', movieIdx: movieIdx, feedback: feedback}}, '*');
-        }}
-        
-        // Handle keyboard navigation
-        document.addEventListener('keydown', function(event) {{
-            if (event.key === 'Escape') {{
-                closeModal();
-            }} else if (event.key === 'ArrowLeft') {{
-                navigateMovie({st.session_state.selected_movie}, 'prev');
-            }} else if (event.key === 'ArrowRight') {{
-                navigateMovie({st.session_state.selected_movie}, 'next');
-            }}
-        }});
-    </script>
-    '''
-    
-    # Render the modal
-    st.markdown(modal_html, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # =============================================================================
 # MAIN APPLICATION
@@ -871,12 +915,11 @@ def main():
     initialize_session_state()
     inject_custom_css()
     
-    # Main container
-    st.markdown('<div class="main-container">', unsafe_allow_html=True)
-    
     # Title
-    st.markdown(f'<h1 class="couple-title">🎬 {COUPLE_NAME}</h1>', unsafe_allow_html=True)
-    st.markdown('<p style="text-align: center; font-size: 1.1rem; color: #666; margin-bottom: 2rem;">Help us pick our next movie night! Rate these recommendations:</p>', unsafe_allow_html=True)
+    st.markdown(f'<h1 style="text-align: center; color: #e50914; font-size: 2.5rem; margin-bottom: 2rem;">🎬 {COUPLE_NAME}</h1>', 
+                unsafe_allow_html=True)
+    st.markdown('<p style="text-align: center; font-size: 1.1rem; color: #666; margin-bottom: 2rem;">Help us pick our next movie night! Rate these recommendations:</p>', 
+                unsafe_allow_html=True)
     
     # Load recommendations if not already loaded
     if not st.session_state.recommendations:
@@ -887,66 +930,13 @@ def main():
     if st.session_state.feedback_submitted:
         render_thank_you()
     else:
-        # Render movie carousel
-        render_movie_carousel()
-        
-        # Handle JavaScript messages from modal
-        st.markdown('''
-        <script>
-        window.addEventListener('message', function(event) {
-            if (event.data.type === 'closeModal') {
-                // This would trigger Streamlit to close modal
-                const params = new URLSearchParams(window.location.search);
-                params.delete('modal');
-                window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
-                window.location.reload();
-            } else if (event.data.type === 'navigateMovie') {
-                const params = new URLSearchParams(window.location.search);
-                params.set('modal', event.data.index);
-                window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
-                window.location.reload();
-            } else if (event.data.type === 'giveFeedback') {
-                // Handle feedback submission
-                const params = new URLSearchParams(window.location.search);
-                params.set('feedback', `${event.data.movieIdx}-${event.data.feedback}`);
-                window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
-                window.location.reload();
-            }
-        });
-        </script>
-        ''', unsafe_allow_html=True)
-        
-        # Handle URL parameters for modal and feedback
-        query_params = st.query_params
-        
-        # Handle modal display
-        if 'modal' in query_params:
-            try:
-                modal_idx = int(query_params['modal'])
-                st.session_state.selected_movie = modal_idx
-            except:
-                pass
-        
-        # Handle feedback submission
-        if 'feedback' in query_params:
-            try:
-                feedback_data = query_params['feedback'].split('-')
-                if len(feedback_data) == 2:
-                    movie_idx, feedback_type = int(feedback_data[0]), feedback_data[1]
-                    movie_title = st.session_state.recommendations[movie_idx][0]
-                    record_feedback(movie_idx, movie_title, feedback_type)
-                    # Clear the feedback parameter
-                    del st.query_params['feedback']
-            except:
-                pass
-        
-        # Render modal if movie is selected
-        render_movie_modal()
-        
-        # Submit section
-        render_submit_section()
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+        # Show modal if movie is selected
+        if st.session_state.get('selected_movie') is not None:
+            render_movie_modal()
+        else:
+            # Show carousel only when modal is not open
+            render_movie_carousel()
+            render_submit_section()
 
 if __name__ == "__main__":
     main()
