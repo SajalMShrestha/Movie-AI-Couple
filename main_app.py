@@ -113,7 +113,7 @@ def initialize_session_state():
 # =============================================================================
 
 def inject_custom_css():
-    """Inject custom CSS for Netflix-style carousel."""
+    """Inject custom CSS for Netflix-style carousel and modal."""
     st.markdown("""
     <style>
     /* Hide Streamlit branding */
@@ -137,244 +137,290 @@ def inject_custom_css():
         color: #e50914;
     }
     
-    /* Carousel container */
-    .carousel-container {
-        margin: 2rem 0;
-    }
-    
-    .carousel-scroll {
-        display: flex;
-        overflow-x: auto;
-        gap: 1rem;
-        padding: 1rem 0;
-        scroll-behavior: smooth;
-    }
-    
-    .carousel-scroll::-webkit-scrollbar {
-        height: 8px;
-    }
-    
-    .carousel-scroll::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 10px;
-    }
-    
-    .carousel-scroll::-webkit-scrollbar-thumb {
-        background: #888;
-        border-radius: 10px;
-    }
-    
-    .carousel-scroll::-webkit-scrollbar-thumb:hover {
-        background: #555;
-    }
-    
-    /* Movie card */
-    .movie-card {
-        flex: 0 0 200px;
-        text-align: center;
-        cursor: pointer;
-        transition: transform 0.2s;
-    }
-    
-    .movie-card:hover {
-        transform: scale(1.05);
-    }
-    
-    .movie-poster {
+    /* Modal Overlay */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
         width: 100%;
-        height: 300px;
-        object-fit: cover;
-        border-radius: 8px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-    }
-    
-    .movie-title {
-        font-size: 0.9rem;
-        font-weight: bold;
-        margin: 0.5rem 0;
-        color: #333;
-        line-height: 1.2;
-        height: 2.4em;
-        overflow: hidden;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-    }
-    
-    /* Quick feedback buttons */
-    .quick-feedback {
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(5px);
         display: flex;
+        align-items: center;
         justify-content: center;
-        gap: 0.5rem;
-        margin-top: 0.5rem;
+        z-index: 9999;
+        padding: 20px;
+        box-sizing: border-box;
     }
     
-    .feedback-btn {
-        background: none;
-        border: 2px solid #ddd;
+    /* Modal Content */
+    .modal-content {
+        background: #141414;
+        border-radius: 12px;
+        width: 90vw;
+        max-width: 1000px;
+        max-height: 90vh;
+        overflow-y: auto;
+        position: relative;
+        color: white;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+    }
+    
+    /* Modal Header */
+    .modal-header {
+        position: relative;
+        padding: 2rem;
+        border-bottom: 1px solid #333;
+    }
+    
+    /* Close Button */
+    .modal-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: rgba(42, 42, 42, 0.8);
+        border: none;
         border-radius: 50%;
         width: 40px;
         height: 40px;
+        color: white;
+        font-size: 20px;
         cursor: pointer;
-        font-size: 1.2rem;
         transition: all 0.2s;
         display: flex;
         align-items: center;
         justify-content: center;
     }
     
-    .feedback-btn:hover {
+    .modal-close:hover {
+        background: rgba(255, 255, 255, 0.2);
         transform: scale(1.1);
-        border-color: #333;
     }
     
-    .feedback-btn.selected {
-        background-color: #e50914;
+    /* Navigation Arrows */
+    .nav-arrow {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(42, 42, 42, 0.8);
+        border: none;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
         color: white;
-        border-color: #e50914;
+        font-size: 24px;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10001;
     }
     
-    /* Expanded details */
-    .movie-details {
-        background: #f8f9fa;
-        border-radius: 12px;
+    .nav-arrow:hover {
+        background: rgba(255, 255, 255, 0.2);
+        transform: translateY(-50%) scale(1.1);
+    }
+    
+    .nav-arrow.prev {
+        left: -30px;
+    }
+    
+    .nav-arrow.next {
+        right: -30px;
+    }
+    
+    /* Modal Body */
+    .modal-body {
+        display: flex;
         padding: 2rem;
-        margin: 2rem 0;
-        border-left: 4px solid #e50914;
+        gap: 2rem;
     }
     
-    .detail-title {
-        font-size: 1.5rem;
+    .modal-poster {
+        flex: 0 0 300px;
+    }
+    
+    .modal-poster img {
+        width: 100%;
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+    
+    .modal-details {
+        flex: 1;
+        color: #e5e5e5;
+    }
+    
+    .modal-title {
+        font-size: 2rem;
         font-weight: bold;
-        color: #333;
+        color: white;
         margin-bottom: 1rem;
+        line-height: 1.2;
     }
     
-    .detail-section {
+    .modal-section {
         margin-bottom: 1.5rem;
     }
     
-    .detail-label {
+    .modal-label {
         font-weight: bold;
-        color: #666;
+        color: #ffffff;
         margin-bottom: 0.5rem;
+        font-size: 1.1rem;
+        display: block;
     }
     
-    .detail-text {
+    .modal-text {
         line-height: 1.6;
-        color: #444;
+        color: #e5e5e5;
+        margin-bottom: 1rem;
     }
     
-    /* Large feedback buttons */
-    .large-feedback {
+    .modal-genres {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .genre-tag {
+        background: #e50914;
+        color: white;
+        padding: 0.3rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+    
+    /* Modal Feedback Buttons */
+    .modal-feedback {
         display: flex;
         gap: 1rem;
-        justify-content: center;
         margin-top: 2rem;
+        justify-content: center;
     }
     
-    .large-feedback-btn {
+    .modal-feedback-btn {
         padding: 1rem 2rem;
         font-size: 1.1rem;
-        border: none;
+        border: 2px solid #333;
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.2s;
         min-width: 120px;
+        background: transparent;
+        color: white;
+    }
+    
+    .modal-feedback-btn:hover {
+        transform: scale(1.05);
+        border-color: #e50914;
+    }
+    
+    .modal-feedback-btn.selected {
+        background: #e50914;
+        border-color: #e50914;
+        color: white;
     }
     
     .btn-yes {
-        background-color: #28a745;
-        color: white;
+        border-color: #28a745;
     }
     
-    .btn-yes:hover {
-        background-color: #218838;
-    }
-    
-    .btn-no {
-        background-color: #dc3545;
-        color: white;
-    }
-    
-    .btn-no:hover {
-        background-color: #c82333;
+    .btn-yes:hover,
+    .btn-yes.selected {
+        background: #28a745;
+        border-color: #28a745;
     }
     
     .btn-maybe {
-        background-color: #ffc107;
-        color: #212529;
+        border-color: #ffc107;
     }
     
-    .btn-maybe:hover {
-        background-color: #e0a800;
+    .btn-maybe:hover,
+    .btn-maybe.selected {
+        background: #ffc107;
+        border-color: #ffc107;
+        color: #000;
     }
     
-    /* Submit section */
-    .submit-section {
-        text-align: center;
-        margin: 3rem 0;
-        padding: 2rem;
-        background: #f0f0f0;
-        border-radius: 12px;
+    .btn-no {
+        border-color: #dc3545;
     }
     
-    .feedback-count {
-        font-size: 1.1rem;
-        margin-bottom: 1rem;
-        color: #666;
+    .btn-no:hover,
+    .btn-no.selected {
+        background: #dc3545;
+        border-color: #dc3545;
     }
     
-    /* Thank you message */
-    .thank-you {
-        text-align: center;
-        padding: 3rem;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 12px;
-        margin: 2rem 0;
-    }
-    
-    .thank-you h2 {
-        margin-bottom: 1rem;
-        font-size: 2rem;
-    }
-    
-    /* Mobile responsive */
+    /* Mobile Responsive */
     @media (max-width: 768px) {
-        .couple-title {
-            font-size: 2rem;
+        .modal-content {
+            width: 95vw;
+            max-height: 95vh;
         }
         
-        .movie-card {
-            flex: 0 0 150px;
-        }
-        
-        .movie-poster {
-            height: 225px;
-        }
-        
-        .movie-title {
-            font-size: 0.8rem;
-        }
-        
-        .feedback-btn {
-            width: 35px;
-            height: 35px;
-            font-size: 1rem;
-        }
-        
-        .movie-details {
+        .modal-body {
+            flex-direction: column;
             padding: 1rem;
+            gap: 1rem;
         }
         
-        .large-feedback {
+        .modal-poster {
+            flex: none;
+            max-width: 200px;
+            margin: 0 auto;
+        }
+        
+        .modal-title {
+            font-size: 1.5rem;
+            text-align: center;
+        }
+        
+        .nav-arrow {
+            width: 40px;
+            height: 40px;
+            font-size: 20px;
+        }
+        
+        .nav-arrow.prev {
+            left: -20px;
+        }
+        
+        .nav-arrow.next {
+            right: -20px;
+        }
+        
+        .modal-feedback {
             flex-direction: column;
             align-items: center;
         }
         
-        .large-feedback-btn {
+        .modal-feedback-btn {
             width: 200px;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .modal-overlay {
+            padding: 10px;
+        }
+        
+        .modal-header,
+        .modal-body {
+            padding: 1rem;
+        }
+        
+        .nav-arrow.prev {
+            left: -15px;
+        }
+        
+        .nav-arrow.next {
+            right: -15px;
         }
     }
     </style>
@@ -547,7 +593,7 @@ def render_movie_carousel():
                 
                 # Show detailed view button
                 if st.button("ℹ️ Details", key=f"details_{movie_idx}"):
-                    st.session_state.selected_movie = movie_idx
+                    st.query_params['modal'] = str(movie_idx)
                     st.rerun()
         
         # Add some spacing between rows
@@ -653,6 +699,161 @@ def render_thank_you():
     </div>
     ''', unsafe_allow_html=True)
 
+def render_movie_modal():
+    """Render the Netflix-style modal for movie details."""
+    if st.session_state.get('selected_movie') is None:
+        return
+    
+    movie_idx = st.session_state.selected_movie
+    if movie_idx >= len(st.session_state.recommendations):
+        return
+    
+    movie_title, score, explanation = st.session_state.recommendations[movie_idx]
+    
+    # Get movie details
+    details = get_movie_details(movie_title)
+    poster_url = get_movie_poster_url(movie_title)
+    
+    # Get feedback status
+    feedback = st.session_state.feedback_given.get(movie_idx, None)
+    
+    # Create modal HTML
+    modal_html = f'''
+    <div class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <!-- Close Button -->
+            <button class="modal-close" onclick="closeModal()">×</button>
+            
+            <!-- Navigation Arrows -->
+            <button class="nav-arrow prev" onclick="navigateMovie({movie_idx}, 'prev')">‹</button>
+            <button class="nav-arrow next" onclick="navigateMovie({movie_idx}, 'next')">›</button>
+            
+            <!-- Modal Body -->
+            <div class="modal-body">
+                <div class="modal-poster">
+                    {"<img src='" + poster_url + "' alt='" + movie_title + "'>" if poster_url else "<div style='background:#333; height:450px; display:flex; align-items:center; justify-content:center; border-radius:8px; color:#999;'>🎬<br>No Poster</div>"}
+                </div>
+                
+                <div class="modal-details">
+                    <h1 class="modal-title">{movie_title}</h1>
+                    
+                    <div class="modal-section">
+                        <span class="modal-label">🎯 Why we recommend this:</span>
+                        <div class="modal-text">{explanation}</div>
+                    </div>
+    '''
+    
+    # Add plot summary if available
+    if details and details.get('overview'):
+        modal_html += f'''
+                    <div class="modal-section">
+                        <span class="modal-label">📖 Plot:</span>
+                        <div class="modal-text">{details['overview']}</div>
+                    </div>
+        '''
+    
+    # Add genres if available
+    if details and details.get('genres'):
+        genres_html = ''.join([f'<span class="genre-tag">{genre}</span>' for genre in details['genres']])
+        modal_html += f'''
+                    <div class="modal-section">
+                        <span class="modal-label">🎭 Genres:</span>
+                        <div class="modal-genres">{genres_html}</div>
+                    </div>
+        '''
+    
+    # Add cast and director if available (using TMDB API)
+    try:
+        from tmdbv3api import Movie
+        movie_api = Movie()
+        search_result = movie_api.search(movie_title)
+        if search_result:
+            credits = movie_api.credits(search_result[0].id)
+            
+            # Get cast (top 3)
+            cast_list = credits.cast[:3] if hasattr(credits, 'cast') and credits.cast else []
+            if cast_list:
+                cast_names = [getattr(actor, 'name', '') for actor in cast_list if hasattr(actor, 'name')]
+                if cast_names:
+                    modal_html += f'''
+                    <div class="modal-section">
+                        <span class="modal-label">🎭 Starring:</span>
+                        <div class="modal-text">{', '.join(cast_names)}</div>
+                    </div>
+                    '''
+            
+            # Get director
+            crew_list = credits.crew if hasattr(credits, 'crew') and credits.crew else []
+            directors = [getattr(person, 'name', '') for person in crew_list if getattr(person, 'job', '') == 'Director']
+            if directors:
+                modal_html += f'''
+                    <div class="modal-section">
+                        <span class="modal-label">🎬 Director:</span>
+                        <div class="modal-text">{directors[0]}</div>
+                    </div>
+                '''
+    except:
+        pass
+    
+    # Add feedback section
+    modal_html += f'''
+                    <div class="modal-section">
+                        <span class="modal-label">Would you both watch this movie together?</span>
+                        <div class="modal-feedback">
+                            <button class="modal-feedback-btn btn-yes {'selected' if feedback == 'Yes' else ''}" 
+                                    onclick="giveFeedback({movie_idx}, 'Yes')">👍 Yes!</button>
+                            <button class="modal-feedback-btn btn-maybe {'selected' if feedback == 'Maybe' else ''}" 
+                                    onclick="giveFeedback({movie_idx}, 'Maybe')">🤷 Maybe</button>
+                            <button class="modal-feedback-btn btn-no {'selected' if feedback == 'No' else ''}" 
+                                    onclick="giveFeedback({movie_idx}, 'No')">👎 No</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function closeModal(event) {{
+            // Close if clicking outside modal content or on close button
+            if (!event || event.target.classList.contains('modal-overlay') || event.target.classList.contains('modal-close')) {{
+                window.parent.postMessage({{type: 'closeModal'}}, '*');
+            }}
+        }}
+        
+        function navigateMovie(currentIdx, direction) {{
+            const totalMovies = {len(st.session_state.recommendations)};
+            let newIdx;
+            
+            if (direction === 'prev') {{
+                newIdx = currentIdx > 0 ? currentIdx - 1 : totalMovies - 1;
+            }} else {{
+                newIdx = currentIdx < totalMovies - 1 ? currentIdx + 1 : 0;
+            }}
+            
+            window.parent.postMessage({{type: 'navigateMovie', index: newIdx}}, '*');
+        }}
+        
+        function giveFeedback(movieIdx, feedback) {{
+            window.parent.postMessage({{type: 'giveFeedback', movieIdx: movieIdx, feedback: feedback}}, '*');
+        }}
+        
+        // Handle keyboard navigation
+        document.addEventListener('keydown', function(event) {{
+            if (event.key === 'Escape') {{
+                closeModal();
+            }} else if (event.key === 'ArrowLeft') {{
+                navigateMovie({st.session_state.selected_movie}, 'prev');
+            }} else if (event.key === 'ArrowRight') {{
+                navigateMovie({st.session_state.selected_movie}, 'next');
+            }}
+        }});
+    </script>
+    '''
+    
+    # Render the modal
+    st.markdown(modal_html, unsafe_allow_html=True)
+
 # =============================================================================
 # MAIN APPLICATION
 # =============================================================================
@@ -689,34 +890,58 @@ def main():
         # Render movie carousel
         render_movie_carousel()
         
-        # Handle movie selection via URL params or session state
-        query_params = st.query_params
-        selected_index = query_params.get('movie', [None])[0]
-        
-        if selected_index is not None:
-            try:
-                movie_index = int(selected_index)
-                if 0 <= movie_index < len(st.session_state.recommendations):
-                    render_movie_details(movie_index)
-            except ValueError:
-                pass
-        
-        # JavaScript to handle carousel interactions
+        # Handle JavaScript messages from modal
         st.markdown('''
         <script>
         window.addEventListener('message', function(event) {
-            if (event.data.type === 'selectMovie') {
+            if (event.data.type === 'closeModal') {
+                // This would trigger Streamlit to close modal
                 const params = new URLSearchParams(window.location.search);
-                params.set('movie', event.data.index);
+                params.delete('modal');
                 window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
                 window.location.reload();
-            } else if (event.data.type === 'quickFeedback') {
-                // This would need to be handled via Streamlit's session state
-                // For now, we'll rely on the large buttons in the detail view
+            } else if (event.data.type === 'navigateMovie') {
+                const params = new URLSearchParams(window.location.search);
+                params.set('modal', event.data.index);
+                window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
+                window.location.reload();
+            } else if (event.data.type === 'giveFeedback') {
+                // Handle feedback submission
+                const params = new URLSearchParams(window.location.search);
+                params.set('feedback', `${event.data.movieIdx}-${event.data.feedback}`);
+                window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
+                window.location.reload();
             }
         });
         </script>
         ''', unsafe_allow_html=True)
+        
+        # Handle URL parameters for modal and feedback
+        query_params = st.query_params
+        
+        # Handle modal display
+        if 'modal' in query_params:
+            try:
+                modal_idx = int(query_params['modal'])
+                st.session_state.selected_movie = modal_idx
+            except:
+                pass
+        
+        # Handle feedback submission
+        if 'feedback' in query_params:
+            try:
+                feedback_data = query_params['feedback'].split('-')
+                if len(feedback_data) == 2:
+                    movie_idx, feedback_type = int(feedback_data[0]), feedback_data[1]
+                    movie_title = st.session_state.recommendations[movie_idx][0]
+                    record_feedback(movie_idx, movie_title, feedback_type)
+                    # Clear the feedback parameter
+                    del st.query_params['feedback']
+            except:
+                pass
+        
+        # Render modal if movie is selected
+        render_movie_modal()
         
         # Submit section
         render_submit_section()
