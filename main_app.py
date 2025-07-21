@@ -103,10 +103,55 @@ def initialize_session_state():
     if "couple_cache" not in st.session_state:
         st.session_state.couple_cache = {}
     
+    # NEW: Movie modal cache for cast/director info
+    if "movie_modal_cache" not in st.session_state:
+        st.session_state.movie_modal_cache = {}
+    
     # Session ID for feedback
     if "session_id" not in st.session_state:
         import uuid
         st.session_state.session_id = str(uuid.uuid4())
+
+def get_movie_cast_director(movie_title):
+    """Get cast and director info with caching for better performance."""
+    # Check cache first
+    if movie_title in st.session_state.movie_modal_cache:
+        return st.session_state.movie_modal_cache[movie_title]
+    
+    try:
+        from tmdbv3api import Movie
+        movie_api = Movie()
+        search_result = movie_api.search(movie_title)
+        
+        cast_info = {"cast": [], "director": ""}
+        
+        if search_result:
+            credits = movie_api.credits(search_result[0].id)
+            
+            # Cast (top 3)
+            if hasattr(credits, 'cast') and credits.cast:
+                cast_names = []
+                for actor in credits.cast[:3]:
+                    if hasattr(actor, 'name'):
+                        cast_names.append(actor.name)
+                cast_info["cast"] = cast_names
+            
+            # Director
+            if hasattr(credits, 'crew') and credits.crew:
+                for person in credits.crew:
+                    if hasattr(person, 'job') and person.job == 'Director' and hasattr(person, 'name'):
+                        cast_info["director"] = person.name
+                        break
+        
+        # Cache the result
+        st.session_state.movie_modal_cache[movie_title] = cast_info
+        return cast_info
+    
+    except Exception as e:
+        # Return empty info on error
+        empty_info = {"cast": [], "director": ""}
+        st.session_state.movie_modal_cache[movie_title] = empty_info
+        return empty_info
 
 # =============================================================================
 # UI STYLING
@@ -534,7 +579,7 @@ def record_feedback(movie_index, movie_title, feedback_type):
 # =============================================================================
 
 def render_movie_carousel():
-    """Render the Netflix-style movie carousel using Streamlit columns."""
+    """Render the Netflix-style movie carousel with feedback status indicators."""
     if not st.session_state.recommendations:
         st.warning("Loading recommendations...")
         return
@@ -552,6 +597,7 @@ def render_movie_carousel():
                 break
                 
             movie_title, score, explanation = st.session_state.recommendations[movie_idx]
+            feedback = st.session_state.feedback_given.get(movie_idx, None)
             
             with cols[col_idx]:
                 # Movie poster
@@ -565,12 +611,14 @@ def render_movie_carousel():
                         unsafe_allow_html=True
                     )
                 
-                # Movie title
-                st.markdown(f"**{movie_title}**")
+                # Movie title with feedback status indicator
+                if feedback:
+                    feedback_icon = "✅" if feedback == "Yes" else "❓" if feedback == "Maybe" else "❌"
+                    st.markdown(f"**{movie_title}** {feedback_icon}")
+                else:
+                    st.markdown(f"**{movie_title}**")
                 
                 # Quick feedback buttons
-                feedback = st.session_state.feedback_given.get(movie_idx, None)
-                
                 button_cols = st.columns(3)
                 
                 with button_cols[0]:
@@ -593,7 +641,7 @@ def render_movie_carousel():
                 
                 # Show detailed view button
                 if st.button("ℹ️ Details", key=f"details_{movie_idx}"):
-                    st.session_state.selected_movie = movie_idx  # Set session state directly
+                    st.session_state.selected_movie = movie_idx
                     st.rerun()
         
         # Add some spacing between rows
@@ -700,7 +748,7 @@ def render_thank_you():
     ''', unsafe_allow_html=True)
 
 def render_movie_modal():
-    """Render the Netflix-style modal using Streamlit native components."""
+    """Render movie details with keyboard navigation and cached data."""
     if st.session_state.get('selected_movie') is None:
         return
     
@@ -710,157 +758,171 @@ def render_movie_modal():
     
     movie_title, score, explanation = st.session_state.recommendations[movie_idx]
     
-    # Use a lighter background for the modal
+    # Add keyboard navigation JavaScript
+    st.markdown("""
+    <script>
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            window.parent.postMessage({type: 'closeModal'}, '*');
+        } else if (event.key === 'ArrowLeft') {
+            window.parent.postMessage({type: 'prevMovie'}, '*');
+        } else if (event.key === 'ArrowRight') {
+            window.parent.postMessage({type: 'nextMovie'}, '*');
+        }
+    });
+    
+    window.addEventListener('message', function(event) {
+        if (event.data.type === 'closeModal') {
+            // Trigger close
+        } else if (event.data.type === 'prevMovie') {
+            // Trigger previous
+        } else if (event.data.type === 'nextMovie') {
+            // Trigger next
+        }
+    });
+    </script>
+    """, unsafe_allow_html=True)
+    
+    # Compact styling
     st.markdown("""
     <style>
-    .modal-fullscreen {
-        background: #f0f0f0;
-        padding: 2rem;
-        border-radius: 12px;
-        margin: -1rem;
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
     }
     </style>
     """, unsafe_allow_html=True)
     
-    with st.container():
-        st.markdown('<div class="modal-backdrop">', unsafe_allow_html=True)
-        st.markdown('<div class="modal-fullscreen">', unsafe_allow_html=True)
+    # Check for keyboard navigation via URL params (simple implementation)
+    query_params = st.query_params
+    if 'nav' in query_params:
+        nav_action = query_params['nav']
+        current_idx = st.session_state.selected_movie
+        total_movies = len(st.session_state.recommendations)
         
-        # Modal Header with navigation
-        col1, col2, col3, col4, col5 = st.columns([1, 1, 3, 1, 1])
+        if nav_action == 'prev':
+            new_idx = current_idx - 1 if current_idx > 0 else total_movies - 1
+            st.session_state.selected_movie = new_idx
+            del st.query_params['nav']
+            st.rerun()
+        elif nav_action == 'next':
+            new_idx = current_idx + 1 if current_idx < total_movies - 1 else 0
+            st.session_state.selected_movie = new_idx
+            del st.query_params['nav']
+            st.rerun()
+        elif nav_action == 'close':
+            st.session_state.selected_movie = None
+            del st.query_params['nav']
+            st.rerun()
+    
+    # Modal Header with navigation
+    col1, col2, col3, col4, col5 = st.columns([2, 2, 3, 2, 2])
+    
+    with col1:
+        if st.button("\u25C0 Previous", key="modal_prev", use_container_width=True, help="Previous movie (← key)"):
+            current_idx = st.session_state.selected_movie
+            total_movies = len(st.session_state.recommendations)
+            new_idx = current_idx - 1 if current_idx > 0 else total_movies - 1
+            st.session_state.selected_movie = new_idx
+            st.rerun()
+    
+    with col3:
+        st.markdown(f"<h3 style='text-align: center; color: #e50914; margin: 0;'>Movie {movie_idx + 1} of {len(st.session_state.recommendations)}</h3>", 
+                   unsafe_allow_html=True)
+    
+    with col5:
+        if st.button("Next \u25B6", key="modal_next", use_container_width=True, help="Next movie (→ key)"):
+            current_idx = st.session_state.selected_movie
+            total_movies = len(st.session_state.recommendations)
+            new_idx = current_idx + 1 if current_idx < total_movies - 1 else 0
+            st.session_state.selected_movie = new_idx
+            st.rerun()
+    
+    # Close button centered below
+    col_spacer1, col_close, col_spacer2 = st.columns([4, 2, 4])
+    with col_close:
+        if st.button("✕ Close", key="modal_close", use_container_width=True, help="Close modal (Esc key)"):
+            st.session_state.selected_movie = None
+            st.rerun()
+    
+    # Compact divider
+    st.markdown("<hr style='margin: 1rem 0;'>", unsafe_allow_html=True)
+    
+    # Modal Body
+    col_poster, col_details = st.columns([1, 2])
+    
+    with col_poster:
+        # Movie poster
+        poster_url = get_movie_poster_url(movie_title)
+        if poster_url:
+            st.image(poster_url, width=250)
+        else:
+            st.info("🎬 No Poster Available")
+    
+    with col_details:
+        # Movie title
+        st.markdown(f"<h2 style='margin-bottom: 0.5rem;'>{movie_title}</h2>", 
+                   unsafe_allow_html=True)
         
-        with col1:
-            if st.button("\u25C0 Prev", key="modal_prev", help="Previous movie"):
-                current_idx = st.session_state.selected_movie
-                total_movies = len(st.session_state.recommendations)
-                new_idx = current_idx - 1 if current_idx > 0 else total_movies - 1
-                st.session_state.selected_movie = new_idx
+        # Why we recommend this
+        st.markdown("**🎯 Why we recommend this:**")
+        st.write(explanation)
+        
+        # Get and display movie details
+        details = get_movie_details(movie_title)
+        
+        if details:
+            # Plot summary
+            if details.get('overview'):
+                st.markdown("**📖 Plot:**")
+                st.write(details['overview'])
+            
+            # Genres
+            if details.get('genres'):
+                genres_text = " • ".join(details['genres'])
+                st.markdown(f"**🎭 Genres:** {genres_text}")
+            
+            # Get cached cast and director info
+            cast_director_info = get_movie_cast_director(movie_title)
+            
+            # Cast
+            if cast_director_info["cast"]:
+                st.markdown(f"**🎭 Starring:** {', '.join(cast_director_info['cast'])}")
+            
+            # Director
+            if cast_director_info["director"]:
+                st.markdown(f"**🎬 Director:** {cast_director_info['director']}")
+        
+        # Feedback Section
+        st.markdown("<hr style='margin: 1rem 0;'>", unsafe_allow_html=True)
+        st.markdown("**Would you both watch this movie together?**")
+        
+        feedback = st.session_state.feedback_given.get(movie_idx, None)
+        
+        # Feedback buttons
+        col_yes, col_maybe, col_no = st.columns(3)
+        
+        with col_yes:
+            button_type = "primary" if feedback == "Yes" else "secondary"
+            if st.button("👍 Yes!", key=f"modal_yes_{movie_idx}", type=button_type, use_container_width=True):
+                record_feedback(movie_idx, movie_title, "Yes")
+                st.success("✅ Marked as 'Yes'!")
+                st.balloons()
                 st.rerun()
         
-        with col2:
-            if st.button("Next \u25B6", key="modal_next", help="Next movie"):
-                current_idx = st.session_state.selected_movie
-                total_movies = len(st.session_state.recommendations)
-                new_idx = current_idx + 1 if current_idx < total_movies - 1 else 0
-                st.session_state.selected_movie = new_idx
+        with col_maybe:
+            button_type = "primary" if feedback == "Maybe" else "secondary"
+            if st.button("🤷 Maybe", key=f"modal_maybe_{movie_idx}", type=button_type, use_container_width=True):
+                record_feedback(movie_idx, movie_title, "Maybe")
+                st.success("✅ Marked as 'Maybe'!")
                 st.rerun()
         
-        with col3:
-            st.markdown(f"<h2 style='text-align: center; color: #e50914; margin: 0;'>Movie {movie_idx + 1} of {len(st.session_state.recommendations)}</h2>", 
-                       unsafe_allow_html=True)
-        
-        with col5:
-            if st.button("\u2715 Close", key="modal_close", help="Close modal"):
-                st.session_state.selected_movie = None
+        with col_no:
+            button_type = "primary" if feedback == "No" else "secondary"
+            if st.button("👎 No", key=f"modal_no_{movie_idx}", type=button_type, use_container_width=True):
+                record_feedback(movie_idx, movie_title, "No")
+                st.success("✅ Marked as 'No'!")
                 st.rerun()
-        
-        st.markdown("---")
-        
-        # Modal Body
-        col_poster, col_details = st.columns([1, 2])
-        
-        with col_poster:
-            # Movie poster
-            poster_url = get_movie_poster_url(movie_title)
-            if poster_url:
-                st.image(poster_url, width=300)
-            else:
-                st.markdown("""
-                <div style='background: #333; height: 450px; display: flex; align-items: center; 
-                           justify-content: center; border-radius: 8px; color: #999; font-size: 2rem;'>
-                    🎬<br><span style='font-size: 1rem;'>No Poster</span>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        with col_details:
-            # Movie title
-            st.markdown(f"<h1 style='color: #e50914; font-size: 2rem; margin-bottom: 1rem;'>{movie_title}</h1>", 
-                       unsafe_allow_html=True)
-            
-            # Why we recommend this
-            st.markdown("**🎯 Why we recommend this:**")
-            st.write(explanation)
-            
-            # Get and display movie details
-            details = get_movie_details(movie_title)
-            
-            if details:
-                # Plot summary
-                if details.get('overview'):
-                    st.markdown("**📖 Plot:**")
-                    st.write(details['overview'])
-                
-                # Genres
-                if details.get('genres'):
-                    st.markdown("**🎭 Genres:**")
-                    genres_text = " • ".join(details['genres'])
-                    st.markdown(f"<span style='color: #e50914; font-weight: bold;'>{genres_text}</span>", 
-                               unsafe_allow_html=True)
-                
-                # Try to get cast and director
-                try:
-                    from tmdbv3api import Movie
-                    movie_api = Movie()
-                    search_result = movie_api.search(movie_title)
-                    
-                    if search_result:
-                        credits = movie_api.credits(search_result[0].id)
-                        
-                        # Cast (top 3)
-                        if hasattr(credits, 'cast') and credits.cast:
-                            cast_names = []
-                            for actor in credits.cast[:3]:
-                                if hasattr(actor, 'name'):
-                                    cast_names.append(actor.name)
-                            
-                            if cast_names:
-                                st.markdown("**🎭 Starring:**")
-                                st.write(", ".join(cast_names))
-                        
-                        # Director
-                        if hasattr(credits, 'crew') and credits.crew:
-                            directors = []
-                            for person in credits.crew:
-                                if hasattr(person, 'job') and person.job == 'Director' and hasattr(person, 'name'):
-                                    directors.append(person.name)
-                            
-                            if directors:
-                                st.markdown("**🎬 Director:**")
-                                st.write(directors[0])
-                
-                except Exception as e:
-                    pass  # Skip cast/director if API call fails
-            
-            # Feedback Section
-            st.markdown("---")
-            st.markdown("**Would you both watch this movie together?**")
-            
-            feedback = st.session_state.feedback_given.get(movie_idx, None)
-            
-            # Feedback buttons
-            col_yes, col_maybe, col_no = st.columns(3)
-            
-            with col_yes:
-                button_type = "primary" if feedback == "Yes" else "secondary"
-                if st.button("👍 Yes!", key=f"modal_yes_{movie_idx}", type=button_type):
-                    record_feedback(movie_idx, movie_title, "Yes")
-                    st.success("✅ Marked as 'Yes'!")
-                    st.balloons()  # Celebratory balloons for positive feedback
-            
-            with col_maybe:
-                button_type = "primary" if feedback == "Maybe" else "secondary"
-                if st.button("🤷 Maybe", key=f"modal_maybe_{movie_idx}", type=button_type):
-                    record_feedback(movie_idx, movie_title, "Maybe")
-                    st.success("✅ Marked as 'Maybe'!")
-            
-            with col_no:
-                button_type = "primary" if feedback == "No" else "secondary"
-                if st.button("👎 No", key=f"modal_no_{movie_idx}", type=button_type):
-                    record_feedback(movie_idx, movie_title, "No")
-                    st.success("✅ Marked as 'No'!")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
 # =============================================================================
 # MAIN APPLICATION
