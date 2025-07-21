@@ -710,57 +710,21 @@ def render_movie_modal():
     
     movie_title, score, explanation = st.session_state.recommendations[movie_idx]
     
-    # Create modal background overlay with CSS
+    # Use a lighter background for the modal
     st.markdown("""
     <style>
-    .modal-backdrop {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(0, 0, 0, 0.8);
-        backdrop-filter: blur(5px);
-        z-index: 9999;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        box-sizing: border-box;
-    }
-    
-    .modal-container {
-        background: #141414;
+    .modal-fullscreen {
+        background: #f0f0f0;
+        padding: 2rem;
         border-radius: 12px;
-        width: 90vw;
-        max-width: 900px;
-        max-height: 90vh;
-        overflow-y: auto;
-        color: white;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
-        position: relative;
-    }
-    
-    .modal-header-custom {
-        padding: 1rem 2rem;
-        border-bottom: 1px solid #333;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    
-    .modal-nav {
-        display: flex;
-        gap: 1rem;
-        align-items: center;
+        margin: -1rem;
     }
     </style>
     """, unsafe_allow_html=True)
     
-    # Create the modal using Streamlit container
     with st.container():
         st.markdown('<div class="modal-backdrop">', unsafe_allow_html=True)
-        st.markdown('<div class="modal-container">', unsafe_allow_html=True)
+        st.markdown('<div class="modal-fullscreen">', unsafe_allow_html=True)
         
         # Modal Header with navigation
         col1, col2, col3, col4, col5 = st.columns([1, 1, 3, 1, 1])
@@ -782,7 +746,7 @@ def render_movie_modal():
                 st.rerun()
         
         with col3:
-            st.markdown(f"<h2 style='text-align: center; color: white; margin: 0;'>Movie {movie_idx + 1} of {len(st.session_state.recommendations)}</h2>", 
+            st.markdown(f"<h2 style='text-align: center; color: #e50914; margin: 0;'>Movie {movie_idx + 1} of {len(st.session_state.recommendations)}</h2>", 
                        unsafe_allow_html=True)
         
         with col5:
@@ -810,7 +774,7 @@ def render_movie_modal():
         
         with col_details:
             # Movie title
-            st.markdown(f"<h1 style='color: white; font-size: 2rem; margin-bottom: 1rem;'>{movie_title}</h1>", 
+            st.markdown(f"<h1 style='color: #e50914; font-size: 2rem; margin-bottom: 1rem;'>{movie_title}</h1>", 
                        unsafe_allow_html=True)
             
             # Why we recommend this
