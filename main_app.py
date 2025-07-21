@@ -112,6 +112,19 @@ def initialize_session_state():
         import uuid
         st.session_state.session_id = str(uuid.uuid4())
 
+    # ADDITIONAL STATE FOR ADVANCED RECOMMENDATION LOGIC
+    if "extended_recommendations" not in st.session_state:
+        st.session_state.extended_recommendations = []  # Store full list (20+ movies)
+
+    if "watched_movies" not in st.session_state:
+        st.session_state.watched_movies = {}  # Track "already watched" responses
+
+    if "replacement_count" not in st.session_state:
+        st.session_state.replacement_count = {}  # Track replacements per slot
+
+    if "current_displayed_movies" not in st.session_state:
+        st.session_state.current_displayed_movies = {}  # Track which movies are currently shown
+
 def get_movie_cast_director(movie_title):
     """Get cast and director info with caching for better performance."""
     # Check cache first
@@ -468,6 +481,132 @@ def inject_custom_css():
             right: -15px;
         }
     }
+    
+    /* Feedback buttons enhancement - SIMPLIFIED */
+    .feedback-buttons {
+        display: flex;
+        gap: 0.25rem;
+        margin-top: 0.5rem;
+    }
+    
+    .feedback-btn {
+        flex: 1;
+        min-height: 35px;
+        font-size: 0.8rem;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+        background: white;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .feedback-btn:hover {
+        transform: scale(1.02);
+    }
+    
+    .feedback-btn.selected {
+        font-weight: bold;
+    }
+    
+    .btn-yes.selected {
+        background: #28a745;
+        color: white;
+        border-color: #28a745;
+    }
+    
+    .btn-maybe.selected {
+        background: #ffc107;
+        color: black;
+        border-color: #ffc107;
+    }
+    
+    .btn-no.selected {
+        background: #dc3545;
+        color: white;
+        border-color: #dc3545;
+    }
+    
+    .btn-watched.selected {
+        background: #6c757d;
+        color: white;
+        border-color: #6c757d;
+    }
+    
+    /* Loading state for finding alternatives */
+    .finding-alternative {
+        background: linear-gradient(45deg, #f0f0f0, #e0e0e0);
+        animation: pulse 1.5s ease-in-out infinite;
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+        margin: 0.5rem 0;
+        font-weight: bold;
+        color: #555;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 0.6; }
+        50% { opacity: 1; }
+        100% { opacity: 0.6; }
+    }
+
+    /* Mobile Responsive */
+    @media (max-width: 768px) {
+        .modal-content {
+            width: 95vw;
+            max-height: 95vh;
+        }
+        
+        .modal-body {
+            flex-direction: column;
+            padding: 1rem;
+            gap: 1rem;
+        }
+        
+        .modal-poster {
+            flex: none;
+            max-width: 200px;
+            margin: 0 auto;
+        }
+        
+        .modal-title {
+            font-size: 1.5rem;
+            text-align: center;
+        }
+        
+        .nav-arrow {
+            width: 40px;
+            height: 40px;
+            font-size: 20px;
+        }
+        
+        .nav-arrow.prev {
+            left: -20px;
+        }
+        
+        .nav-arrow.next {
+            right: -20px;
+        }
+        
+        .modal-feedback {
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .modal-feedback-btn {
+            width: 200px;
+        }
+        /* Feedback buttons mobile override */
+        .feedback-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.25rem;
+        }
+        .feedback-btn {
+            min-height: 40px;
+            font-size: 0.9rem;
+        }
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -510,7 +649,7 @@ def get_movie_details(movie_title):
 def generate_recommendations():
     """Generate movie recommendations for the couple."""
     if not couple_scoring_available:
-        # Return dummy data for UI testing
+        # Return expanded dummy data for UI testing
         return [
             ("Inception", 0.85, "Perfect blend of action and complex storytelling that bridges both your tastes."),
             ("The Grand Budapest Hotel", 0.82, "Whimsical yet sophisticated, matching your appreciation for unique narratives."),
@@ -521,7 +660,18 @@ def generate_recommendations():
             ("Mad Max: Fury Road", 0.73, "High-octane action with strong character development."),
             ("Moonrise Kingdom", 0.72, "Charming coming-of-age story with visual flair."),
             ("Baby Driver", 0.70, "Stylish action with great music and humor."),
-            ("The Shape of Water", 0.68, "Unique fantasy romance with exceptional cinematography.")
+            ("The Shape of Water", 0.68, "Unique fantasy romance with exceptional cinematography."),
+            # Extended recommendations (positions 11-20)
+            ("Arrival", 0.67, "Thoughtful sci-fi that balances intellect with emotion."),
+            ("The Social Network", 0.66, "Sharp dialogue and compelling character study."),
+            ("Her", 0.65, "Innovative romance that explores modern relationships."),
+            ("Whiplash", 0.64, "Intense drama with incredible performances and music."),
+            ("The Martian", 0.63, "Smart survival story with humor and heart."),
+            ("Ex Machina", 0.62, "Cerebral sci-fi thriller with stunning visuals."),
+            ("Room", 0.61, "Powerful drama with exceptional emotional depth."),
+            ("Brooklyn", 0.60, "Beautiful period piece with strong character development."),
+            ("The Lobster", 0.59, "Unique dark comedy that challenges conventions."),
+            ("Hunt for the Wilderpeople", 0.58, "Heartwarming adventure comedy from New Zealand.")
         ]
     
     # Check cache first
@@ -530,7 +680,8 @@ def generate_recommendations():
         return st.session_state.couple_cache[cache_key]
     
     try:
-        recommendations = recommend_movies_for_couple(PERSON1_MOVIES, PERSON2_MOVIES)
+        # Request more recommendations (20 instead of 10)
+        recommendations = recommend_movies_for_couple(PERSON1_MOVIES, PERSON2_MOVIES, target_recommendations=20)
         st.session_state.couple_cache[cache_key] = recommendations
         return recommendations
     except Exception as e:
@@ -574,15 +725,66 @@ def record_feedback(movie_index, movie_title, feedback_type):
         # Still store locally even if remote fails
         st.session_state.feedback_given[movie_index] = feedback_type
 
+def get_replacement_movie(movie_index):
+    """Get replacement movie for a slot."""
+    # Check if we have extended recommendations loaded
+    if not st.session_state.extended_recommendations:
+        st.session_state.extended_recommendations = generate_recommendations()
+    
+    # Current replacement count for this slot
+    current_replacements = st.session_state.replacement_count.get(movie_index, 0)
+    
+    # Maximum 2 replacements per slot
+    if current_replacements >= 2:
+        return None
+    
+    # Calculate the index of the replacement movie
+    # Original movies are positions 0-9, replacements start from position 10
+    replacement_position = 10 + (movie_index * 2) + current_replacements
+    
+    if replacement_position < len(st.session_state.extended_recommendations):
+        return st.session_state.extended_recommendations[replacement_position]
+    
+    return None
+
+def handle_already_watched(movie_index, movie_title):
+    """Handle when user marks a movie as already watched."""
+    # Record the feedback immediately without rating modal
+    record_feedback(movie_index, movie_title, "Already Watched")
+    
+    # Mark as watched in session state
+    st.session_state.watched_movies[movie_index] = movie_title
+
+def replace_movie_with_alternative(movie_index):
+    """Replace a watched movie with alternative."""
+    # Get replacement movie
+    replacement = get_replacement_movie(movie_index)
+    
+    if replacement:
+        # Update the displayed movie
+        st.session_state.current_displayed_movies[movie_index] = replacement
+        
+        # Increment replacement count
+        st.session_state.replacement_count[movie_index] = st.session_state.replacement_count.get(movie_index, 0) + 1
+        
+        # Clear any existing feedback for this slot
+        if movie_index in st.session_state.feedback_given:
+            del st.session_state.feedback_given[movie_index]
+        
+        return True
+    
+    return False
+
 # =============================================================================
 # UI COMPONENTS
 # =============================================================================
 
 def render_movie_carousel():
-    """Render the Netflix-style movie carousel with feedback status indicators."""
-    if not st.session_state.recommendations:
-        st.warning("Loading recommendations...")
-        return
+    """Render the Netflix-style movie carousel with feedback status indicators and replacement logic."""
+    # Initialize current displayed movies if empty
+    if not st.session_state.current_displayed_movies:
+        for i in range(min(10, len(st.session_state.recommendations))):
+            st.session_state.current_displayed_movies[i] = st.session_state.recommendations[i]
     
     st.markdown("### 🎬 Movie Recommendations")
     
@@ -590,14 +792,19 @@ def render_movie_carousel():
     for row in range(2):
         cols = st.columns(5)
         start_idx = row * 5
-        end_idx = min(start_idx + 5, len(st.session_state.recommendations))
+        end_idx = min(start_idx + 5, len(st.session_state.current_displayed_movies))
         
         for col_idx, movie_idx in enumerate(range(start_idx, end_idx)):
-            if movie_idx >= len(st.session_state.recommendations):
+            if movie_idx >= len(st.session_state.current_displayed_movies):
                 break
                 
-            movie_title, score, explanation = st.session_state.recommendations[movie_idx]
+            # Get current movie (might be replacement)
+            current_movie = st.session_state.current_displayed_movies[movie_idx]
+            movie_title, score, explanation = current_movie
+            
             feedback = st.session_state.feedback_given.get(movie_idx, None)
+            is_watched = movie_idx in st.session_state.watched_movies
+            replacement_count = st.session_state.replacement_count.get(movie_idx, 0)
             
             with cols[col_idx]:
                 # Movie poster
@@ -611,36 +818,52 @@ def render_movie_carousel():
                         unsafe_allow_html=True
                     )
                 
-                # Movie title with feedback status indicator
-                if feedback:
-                    feedback_icon = "✅" if feedback == "Yes" else "❓" if feedback == "Maybe" else "❌"
-                    st.markdown(f"**{movie_title}** {feedback_icon}")
-                else:
-                    st.markdown(f"**{movie_title}**")
+                # Movie title - SIMPLIFIED (no indicators)
+                st.markdown(f"**{movie_title}**")
                 
-                # Quick feedback buttons
-                button_cols = st.columns(3)
+                # Enhanced feedback buttons (4 options) - SIMPLIFIED
+                button_cols = st.columns(4)
                 
                 with button_cols[0]:
                     button_type = "primary" if feedback == "Yes" else "secondary"
-                    if st.button("👍", key=f"yes_{movie_idx}", type=button_type):
+                    if st.button("👍", key=f"yes_{movie_idx}_{replacement_count}", 
+                               type=button_type, help="Want to watch"):
                         record_feedback(movie_idx, movie_title, "Yes")
                         st.rerun()
                 
                 with button_cols[1]:
                     button_type = "primary" if feedback == "Maybe" else "secondary"
-                    if st.button("🤷", key=f"maybe_{movie_idx}", type=button_type):
+                    if st.button("🤷", key=f"maybe_{movie_idx}_{replacement_count}", 
+                               type=button_type, help="Maybe"):
                         record_feedback(movie_idx, movie_title, "Maybe")
                         st.rerun()
                 
                 with button_cols[2]:
                     button_type = "primary" if feedback == "No" else "secondary"
-                    if st.button("👎", key=f"no_{movie_idx}", type=button_type):
+                    if st.button("👎", key=f"no_{movie_idx}_{replacement_count}", 
+                               type=button_type, help="Don't want to watch"):
                         record_feedback(movie_idx, movie_title, "No")
                         st.rerun()
                 
+                with button_cols[3]:
+                    button_type = "primary" if is_watched else "secondary"
+                    if st.button("✅", key=f"watched_{movie_idx}_{replacement_count}", 
+                               type=button_type, help="Already watched"):
+                        if not is_watched:  # Only process if not already marked as watched
+                            # Show "Finding alternative..." message
+                            with st.spinner("🔍 Finding alternative..."):
+                                handle_already_watched(movie_idx, movie_title)
+                                
+                                # Find and apply replacement
+                                if replace_movie_with_alternative(movie_idx):
+                                    st.success("✨ Found you an alternative!")
+                                    st.rerun()
+                                else:
+                                    st.info("Keeping current movie - no more alternatives available.")
+                                    st.rerun()
+                
                 # Show detailed view button
-                if st.button("ℹ️ Details", key=f"details_{movie_idx}"):
+                if st.button("ℹ️ Details", key=f"details_{movie_idx}_{replacement_count}"):
                     st.session_state.selected_movie = movie_idx
                     st.rerun()
         
@@ -656,6 +879,8 @@ def render_movie_details(movie_index):
     movie_title, score, explanation = st.session_state.recommendations[movie_index]
     details = get_movie_details(movie_title)
     feedback = st.session_state.feedback_given.get(movie_index, None)
+    replacement_count = st.session_state.replacement_count.get(movie_index, 0)
+    is_watched = movie_index in st.session_state.watched_movies
     
     st.markdown(f'''
     <div class="movie-details">
@@ -693,46 +918,65 @@ def render_movie_details(movie_index):
             </div>
             ''', unsafe_allow_html=True)
     
-    # Large feedback buttons
+    # SIMPLIFIED large feedback buttons (4 options)
     st.markdown('<div class="large-feedback">', unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        if st.button("👍 Yes!", key=f"large_yes_{movie_index}", 
+        if st.button("👍 Yes!", key=f"large_yes_{movie_index}_{replacement_count}", 
                     type="primary" if feedback == "Yes" else "secondary"):
             record_feedback(movie_index, movie_title, "Yes")
             st.rerun()
     
     with col2:
-        if st.button("🤷 Maybe", key=f"large_maybe_{movie_index}",
+        if st.button("🤷 Maybe", key=f"large_maybe_{movie_index}_{replacement_count}",
                     type="primary" if feedback == "Maybe" else "secondary"):
             record_feedback(movie_index, movie_title, "Maybe")
             st.rerun()
     
     with col3:
-        if st.button("👎 No", key=f"large_no_{movie_index}",
+        if st.button("👎 No", key=f"large_no_{movie_index}_{replacement_count}",
                     type="primary" if feedback == "No" else "secondary"):
             record_feedback(movie_index, movie_title, "No")
             st.rerun()
+    
+    with col4:
+        if st.button("✅ Already Watched", key=f"large_watched_{movie_index}_{replacement_count}",
+                    type="primary" if is_watched else "secondary"):
+            if not is_watched:  # Only process if not already marked as watched
+                # Show "Finding alternative..." message
+                with st.spinner("🔍 Finding alternative..."):
+                    handle_already_watched(movie_index, movie_title)
+                    
+                    # Find and apply replacement
+                    if replace_movie_with_alternative(movie_index):
+                        st.success("✨ Found you an alternative!")
+                        st.rerun()
+                    else:
+                        st.info("Keeping current movie - no more alternatives available.")
+                        st.rerun()
     
     st.markdown('</div></div>', unsafe_allow_html=True)
 
 def render_submit_section():
     """Render the feedback submission section."""
     feedback_count = len(st.session_state.feedback_given)
-    total_movies = len(st.session_state.recommendations)
+    watched_count = len(st.session_state.watched_movies)
+    total_movies = len(st.session_state.current_displayed_movies)
+    total_responses = feedback_count + watched_count
     
-    if feedback_count > 0:
+    if total_responses > 0:
         st.markdown(f'''
         <div class="submit-section">
             <div class="feedback-count">
-                You've rated {feedback_count} out of {total_movies} movies
+                You've responded to {total_responses} out of {total_movies} movies
+                <br><small>({feedback_count} rated, {watched_count} already watched)</small>
             </div>
         </div>
         ''', unsafe_allow_html=True)
         
-        if feedback_count == total_movies:
+        if total_responses == total_movies:
             if st.button("✅ Submit All Feedback", type="primary", key="submit_all"):
                 st.session_state.feedback_submitted = True
                 st.rerun()
@@ -950,7 +1194,8 @@ def main():
     # Load recommendations if not already loaded
     if not st.session_state.recommendations:
         with st.spinner("🎯 Loading personalized recommendations..."):
-            st.session_state.recommendations = generate_recommendations()
+            st.session_state.recommendations = generate_recommendations()[:10]  # Display first 10
+            st.session_state.extended_recommendations = generate_recommendations()  # Store full list
     
     # Show thank you page if feedback submitted
     if st.session_state.feedback_submitted:
