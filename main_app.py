@@ -926,9 +926,8 @@ def render_movie_carousel():
                         ''', unsafe_allow_html=True)
                         
                         # Hidden button to handle the click
-                        if st.button("", key=f"poster_click_{movie_idx}_{replacement_count}", 
-                                   help="Click poster to view details", 
-                                   label_visibility="hidden"):
+                        if st.button(" ", key=f"poster_click_{movie_idx}_{replacement_count}", 
+                                   help="Click poster to view details"):
                             st.session_state.selected_movie = movie_idx
                             st.rerun()
                     else:
@@ -942,10 +941,9 @@ def render_movie_carousel():
                         </div>
                         ''', unsafe_allow_html=True)
                         
-                        # Hidden button for no-poster case
-                        if st.button("", key=f"no_poster_click_{movie_idx}_{replacement_count}", 
-                                   help="Click to view details",
-                                   label_visibility="hidden"):
+                        # Hidden button for no-poster case  
+                        if st.button(" ", key=f"no_poster_click_{movie_idx}_{replacement_count}", 
+                                   help="Click to view details"):
                             st.session_state.selected_movie = movie_idx
                             st.rerun()
                 
