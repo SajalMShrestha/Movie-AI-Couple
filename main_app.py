@@ -915,55 +915,14 @@ def render_movie_carousel():
                     poster_url = get_movie_poster_url(movie_title)
                     
                     if poster_url:
-                        # Use button with poster as background
-                        poster_clicked = st.button("📋 View Details", 
-                                                  key=f"poster_click_{movie_idx}_{replacement_count}",
-                                                  help="Click to view movie details",
-                                                  use_container_width=True)
+                        # Show poster image normally
+                        st.image(poster_url, use_container_width=True)
                         
-                        # Style the button to look like a poster
-                        st.markdown(f'''
-                        <style>
-                        div[data-testid="stButton"] > button[kind="secondary"]:has([data-key="poster_click_{movie_idx}_{replacement_count}"]) {{
-                            background-image: url('{poster_url}');
-                            background-size: cover;
-                            background-position: center;
-                            background-repeat: no-repeat;
-                            height: 300px;
-                            width: 100%;
-                            border: 2px solid transparent;
-                            border-radius: 8px;
-                            color: white;
-                            font-weight: bold;
-                            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-                            background-color: transparent;
-                            transition: all 0.2s;
-                            position: relative;
-                        }}
-                        div[data-testid="stButton"] > button[kind="secondary"]:has([data-key="poster_click_{movie_idx}_{replacement_count}"]):hover {{
-                            transform: scale(1.05);
-                            box-shadow: 0 8px 25px rgba(229, 9, 20, 0.4);
-                            border-color: rgba(229, 9, 20, 0.6);
-                        }}
-                        /* Show text on hover */
-                        div[data-testid="stButton"] > button[kind="secondary"]:has([data-key="poster_click_{movie_idx}_{replacement_count}"])::before {{
-                            content: '';
-                            position: absolute;
-                            top: 0;
-                            left: 0;
-                            right: 0;
-                            bottom: 0;
-                            background: rgba(0,0,0,0.1);
-                            border-radius: 6px;
-                            transition: all 0.2s;
-                        }}
-                        div[data-testid="stButton"] > button[kind="secondary"]:has([data-key="poster_click_{movie_idx}_{replacement_count}"]):hover::before {{
-                            background: rgba(0,0,0,0.3);
-                        }}
-                        </style>
-                        ''', unsafe_allow_html=True)
-                        
-                        if poster_clicked:
+                        # Add clickable button below poster
+                        if st.button("🎬 View Details", 
+                                   key=f"poster_click_{movie_idx}_{replacement_count}",
+                                   help="Click to view movie details",
+                                   use_container_width=True):
                             st.session_state.selected_movie = movie_idx
                             st.rerun()
                     else:
