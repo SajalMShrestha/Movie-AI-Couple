@@ -689,17 +689,23 @@ def generate_recommendations():
         return []
 
 def record_feedback(movie_index, movie_title, feedback_type):
-    """Record user feedback for a movie."""
+    """Record user feedback for a movie - SIMPLIFIED for watched movies."""
     try:
         if feedback_available:
             numeric_id, session_id = get_or_create_numeric_session_id()
             combined_favorites = f"{PERSON1_NAME}: {', '.join(PERSON1_MOVIES)} | {PERSON2_NAME}: {', '.join(PERSON2_MOVIES)}"
             
-            # Get recommendation details
-            if movie_index < len(st.session_state.recommendations):
+            # Get recommendation details from current displayed movies or original recommendations
+            current_movie = st.session_state.current_displayed_movies.get(movie_index)
+            if current_movie:
+                _, score, explanation = current_movie
+            elif movie_index < len(st.session_state.recommendations):
                 _, score, explanation = st.session_state.recommendations[movie_index]
             else:
                 score, explanation = 0.0, "No explanation available"
+            
+            # For watched movies, set liked_if_seen to "N/A"
+            liked_if_seen = "N/A"
             
             record_feedback_to_sheet(
                 numeric_session_id=numeric_id,
@@ -715,15 +721,21 @@ def record_feedback(movie_index, movie_title, feedback_type):
                 recommendation_score=score,
                 recommendation_reason=explanation,
                 would_watch=feedback_type,
-                liked_if_seen="N/A"
+                liked_if_seen=liked_if_seen
             )
         
         # Store feedback in session state
-        st.session_state.feedback_given[movie_index] = feedback_type
+        if feedback_type == "Already Watched":
+            st.session_state.watched_movies[movie_index] = movie_title
+        else:
+            st.session_state.feedback_given[movie_index] = feedback_type
         
     except Exception as e:
         # Still store locally even if remote fails
-        st.session_state.feedback_given[movie_index] = feedback_type
+        if feedback_type == "Already Watched":
+            st.session_state.watched_movies[movie_index] = movie_title
+        else:
+            st.session_state.feedback_given[movie_index] = feedback_type
 
 def get_replacement_movie(movie_index):
     """Get replacement movie for a slot."""
@@ -1143,12 +1155,17 @@ def render_movie_modal():
         
         feedback = st.session_state.feedback_given.get(movie_idx, None)
         
-        # Feedback buttons
-        col_yes, col_maybe, col_no = st.columns(3)
+        # Feedback buttons (4 options)
+        col_yes, col_maybe, col_no, col_watched = st.columns(4)
+        
+        feedback = st.session_state.feedback_given.get(movie_idx, None)
+        is_watched = movie_idx in st.session_state.watched_movies
+        replacement_count = st.session_state.replacement_count.get(movie_idx, 0)
         
         with col_yes:
             button_type = "primary" if feedback == "Yes" else "secondary"
-            if st.button("👍 Yes!", key=f"modal_yes_{movie_idx}", type=button_type, use_container_width=True):
+            if st.button("👍 Yes!", key=f"modal_yes_{movie_idx}_{replacement_count}", 
+                        type=button_type, use_container_width=True):
                 record_feedback(movie_idx, movie_title, "Yes")
                 st.success("✅ Marked as 'Yes'!")
                 st.balloons()
@@ -1156,17 +1173,36 @@ def render_movie_modal():
         
         with col_maybe:
             button_type = "primary" if feedback == "Maybe" else "secondary"
-            if st.button("🤷 Maybe", key=f"modal_maybe_{movie_idx}", type=button_type, use_container_width=True):
+            if st.button("🤷 Maybe", key=f"modal_maybe_{movie_idx}_{replacement_count}", 
+                        type=button_type, use_container_width=True):
                 record_feedback(movie_idx, movie_title, "Maybe")
                 st.success("✅ Marked as 'Maybe'!")
                 st.rerun()
         
         with col_no:
             button_type = "primary" if feedback == "No" else "secondary"
-            if st.button("👎 No", key=f"modal_no_{movie_idx}", type=button_type, use_container_width=True):
+            if st.button("👎 No", key=f"modal_no_{movie_idx}_{replacement_count}", 
+                        type=button_type, use_container_width=True):
                 record_feedback(movie_idx, movie_title, "No")
                 st.success("✅ Marked as 'No'!")
                 st.rerun()
+        
+        with col_watched:
+            button_type = "primary" if is_watched else "secondary"
+            if st.button("✅ Watched", key=f"modal_watched_{movie_idx}_{replacement_count}", 
+                        type=button_type, use_container_width=True):
+                if not is_watched:  # Only process if not already marked as watched
+                    # Show "Finding alternative..." message
+                    with st.spinner("🔍 Finding alternative..."):
+                        handle_already_watched(movie_idx, movie_title)
+                        
+                        # Find and apply replacement
+                        if replace_movie_with_alternative(movie_idx):
+                            st.success("✨ Found you an alternative!")
+                            st.rerun()
+                        else:
+                            st.info("Keeping current movie - no more alternatives available.")
+                            st.rerun()
 
 # =============================================================================
 # MAIN APPLICATION
