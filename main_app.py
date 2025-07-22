@@ -485,7 +485,7 @@ def inject_custom_css():
     /* Feedback buttons enhancement - SIMPLIFIED */
     .feedback-buttons {
         display: flex;
-        gap: 0.25rem;
+        gap: 0.1rem;  /* Reduced from 0.25rem to 0.1rem */
         margin-top: 0.5rem;
     }
     
@@ -551,6 +551,52 @@ def inject_custom_css():
         0% { opacity: 0.6; }
         50% { opacity: 1; }
         100% { opacity: 0.6; }
+    }
+    
+    /* Loading overlay for movie replacement */
+    .movie-loading-overlay {
+        position: relative;
+        width: 100%;
+        height: 300px;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.1rem;
+        font-weight: bold;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+    }
+    
+    .movie-loading-overlay::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 8px;
+        z-index: 1;
+    }
+    
+    .movie-loading-content {
+        position: relative;
+        z-index: 2;
+        text-align: center;
+    }
+    
+    .loading-icon {
+        display: inline-block;
+        animation: spin 2s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
     }
 
     /* Mobile Responsive */
@@ -826,16 +872,55 @@ def render_movie_carousel():
             replacement_count = st.session_state.replacement_count.get(movie_idx, 0)
             
             with cols[col_idx]:
-                # Movie poster
-                poster_url = get_movie_poster_url(movie_title)
+                # Check if this movie is in loading state
+                is_loading = st.session_state.get(f"loading_{movie_idx}", False)
                 
-                if poster_url:
-                    st.image(poster_url, use_container_width=True)
+                if is_loading:
+                    # Show loading overlay
+                    poster_url = get_movie_poster_url(movie_title)
+                    if poster_url:
+                        st.markdown(f'''
+                        <div class="movie-loading-overlay" style="background-image: url('{poster_url}');">
+                            <div class="movie-loading-content">
+                                <div class="loading-icon">🔄</div><br>Loading...
+                            </div>
+                        </div>
+                        ''', unsafe_allow_html=True)
+                    else:
+                        st.markdown('''
+                        <div class="movie-loading-overlay" style="background: #333;">
+                            <div class="movie-loading-content">
+                                <div class="loading-icon">🔄</div><br>Loading...
+                            </div>
+                        </div>
+                        ''', unsafe_allow_html=True)
+                    
+                    # Process replacement after showing loading state
+                    import time
+                    time.sleep(1)  # Show loading for 1 second
+                    
+                    handle_already_watched(movie_idx, movie_title)
+                    
+                    if replace_movie_with_alternative(movie_idx):
+                        st.session_state[f"loading_{movie_idx}"] = False
+                        st.success("✨ Found you an alternative!")
+                        st.rerun()
+                    else:
+                        st.session_state[f"loading_{movie_idx}"] = False
+                        st.info("Keeping current movie - no more alternatives available.")
+                        st.rerun()
+                
                 else:
-                    st.markdown(
-                        f'<div style="background-color: #ddd; height: 300px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: #666;">🎬<br>No Poster</div>',
-                        unsafe_allow_html=True
-                    )
+                    # Normal poster display
+                    poster_url = get_movie_poster_url(movie_title)
+                    
+                    if poster_url:
+                        st.image(poster_url, use_container_width=True)
+                    else:
+                        st.markdown(
+                            f'<div style="background-color: #ddd; height: 300px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: #666;">🎬<br>No Poster</div>',
+                            unsafe_allow_html=True
+                        )
                 
                 # Movie title - SIMPLIFIED (no indicators)
                 st.markdown(f"**{movie_title}**")
@@ -869,17 +954,9 @@ def render_movie_carousel():
                     if st.button("✅", key=f"watched_{movie_idx}_{replacement_count}", 
                                type=button_type, help="Already watched"):
                         if not is_watched:  # Only process if not already marked as watched
-                            # Show shorter spinner message
-                            with st.spinner("🔍 Loading..."):
-                                handle_already_watched(movie_idx, movie_title)
-                                
-                                # Find and apply replacement
-                                if replace_movie_with_alternative(movie_idx):
-                                    st.success("✨ Found you an alternative!")
-                                    st.rerun()
-                                else:
-                                    st.info("Keeping current movie - no more alternatives available.")
-                                    st.rerun()
+                            # Set loading state
+                            st.session_state[f"loading_{movie_idx}"] = True
+                            st.rerun()
                 
                 # Show detailed view button
                 if st.button("ℹ️ Details", key=f"details_{movie_idx}_{replacement_count}"):
@@ -964,17 +1041,9 @@ def render_movie_details(movie_index):
         if st.button("✅ Already Watched", key=f"large_watched_{movie_index}_{replacement_count}",
                     type="primary" if is_watched else "secondary"):
             if not is_watched:  # Only process if not already marked as watched
-                # Show shorter spinner message
-                with st.spinner("🔍 Loading..."):
-                    handle_already_watched(movie_index, movie_title)
-                    
-                    # Find and apply replacement
-                    if replace_movie_with_alternative(movie_index):
-                        st.success("✨ Found you an alternative!")
-                        st.rerun()
-                    else:
-                        st.info("Keeping current movie - no more alternatives available.")
-                        st.rerun()
+                # Set loading state
+                st.session_state[f"loading_{movie_index}"] = True
+                st.rerun()
     
     st.markdown('</div></div>', unsafe_allow_html=True)
 
