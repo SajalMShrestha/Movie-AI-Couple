@@ -911,42 +911,23 @@ def render_movie_carousel():
                         st.rerun()
                 
                 else:
-                    # Clickable poster display
+                    # Normal poster display + clickable overlay
                     poster_url = get_movie_poster_url(movie_title)
                     
                     if poster_url:
-                        # Use a button with the poster as background
-                        if st.button("", key=f"poster_{movie_idx}_{replacement_count}", 
-                                   help="Click to view details"):
+                        # Show the poster normally
+                        st.image(poster_url, use_container_width=True)
+                        
+                        # Add invisible clickable overlay
+                        if st.button("View Details", key=f"poster_click_{movie_idx}_{replacement_count}", 
+                                   help="Click to view movie details"):
                             st.session_state.selected_movie = movie_idx
                             st.rerun()
-                        
-                        # Hide the button and show poster using CSS
-                        st.markdown(f'''
-                        <style>
-                        div[data-testid="stButton"][key="poster_{movie_idx}_{replacement_count}"] button {{
-                            background-image: url('{poster_url}');
-                            background-size: cover;
-                            background-position: center;
-                            background-repeat: no-repeat;
-                            height: 300px;
-                            width: 100%;
-                            border: none;
-                            border-radius: 8px;
-                            cursor: pointer;
-                            padding: 0;
-                            transition: transform 0.2s, box-shadow 0.2s;
-                        }}
-                        div[data-testid="stButton"][key="poster_{movie_idx}_{replacement_count}"] button:hover {{
-                            transform: scale(1.02);
-                            box-shadow: 0 4px 12px rgba(229, 9, 20, 0.3);
-                        }}
-                        </style>
-                        ''', unsafe_allow_html=True)
                     else:
-                        # Clickable no-poster placeholder
+                        # No poster fallback
                         if st.button("🎬\nNo Poster\n(Click for details)", 
                                    key=f"no_poster_{movie_idx}_{replacement_count}",
+                                   use_container_width=True,
                                    help="Click to view details"):
                             st.session_state.selected_movie = movie_idx
                             st.rerun()
