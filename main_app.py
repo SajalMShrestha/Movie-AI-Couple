@@ -871,7 +871,7 @@ def render_movie_carousel():
             is_watched = movie_idx in st.session_state.watched_movies
             replacement_count = st.session_state.replacement_count.get(movie_idx, 0)
             
-                        with cols[col_idx]:
+        with cols[col_idx]:
                 # Normal poster display
                 poster_url = get_movie_poster_url(movie_title)
                 
