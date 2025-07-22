@@ -872,44 +872,8 @@ def render_movie_carousel():
             replacement_count = st.session_state.replacement_count.get(movie_idx, 0)
             
             with cols[col_idx]:
-                # Check if this movie is in loading state
-                is_loading = st.session_state.get(f"loading_{movie_idx}", False)
-                
-                if is_loading:
-                    # Show loading overlay briefly
-                    poster_url = get_movie_poster_url(movie_title)
-                    if poster_url:
-                        st.markdown(f'''
-                        <div class="movie-loading-overlay" style="background-image: url('{poster_url}');">
-                            <div class="movie-loading-content">
-                                <div class="loading-icon">🔄</div><br>Loading...
-                            </div>
-                        </div>
-                        ''', unsafe_allow_html=True)
-                    else:
-                        st.markdown('''
-                        <div class="movie-loading-overlay" style="background: #333;">
-                            <div class="movie-loading-content">
-                                <div class="loading-icon">🔄</div><br>Loading...
-                            </div>
-                        </div>
-                        ''', unsafe_allow_html=True)
-                    
-                    # Process replacement immediately (no sleep!)
-                    handle_already_watched(movie_idx, movie_title)
-                    
-                    if replace_movie_with_alternative(movie_idx):
-                        st.session_state[f"loading_{movie_idx}"] = False
-                        st.success("✨ Found you an alternative!")
-                        st.rerun()
-                    else:
-                        st.session_state[f"loading_{movie_idx}"] = False
-                        st.info("Keeping current movie - no more alternatives available.")
-                        st.rerun()
-                
-                else:
-                    # Normal poster display
-                    poster_url = get_movie_poster_url(movie_title)
+                # Normal poster display
+                poster_url = get_movie_poster_url(movie_title)
                     
                     if poster_url:
                         st.image(poster_url, use_container_width=True)
@@ -958,8 +922,14 @@ def render_movie_carousel():
                     if st.button("✅", key=f"watched_{movie_idx}_{replacement_count}", 
                                type=button_type, help="Already watched"):
                         if not is_watched:  # Only process if not already marked as watched
-                            # Set loading state and trigger rerun to show loading animation
-                            st.session_state[f"loading_{movie_idx}"] = True
+                            # Immediately process without separate loading state
+                            handle_already_watched(movie_idx, movie_title)
+                            
+                            if replace_movie_with_alternative(movie_idx):
+                                st.success("✨ Found you an alternative!")
+                            else:
+                                st.info("Keeping current movie - no more alternatives available.")
+                            
                             st.rerun()
                 
 
