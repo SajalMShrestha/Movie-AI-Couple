@@ -1118,7 +1118,7 @@ def render_movie_modal():
             del st.query_params['nav']
             st.rerun()
     
-    # Modal Header with navigation
+    # Modal Header with navigation - ALL ON SAME ROW
     col1, col2, col3, col4, col5 = st.columns([2, 2, 3, 2, 2])
     
     with col1:
@@ -1127,6 +1127,11 @@ def render_movie_modal():
             total_movies = len(st.session_state.recommendations)
             new_idx = current_idx - 1 if current_idx > 0 else total_movies - 1
             st.session_state.selected_movie = new_idx
+            st.rerun()
+    
+    with col2:
+        if st.button("✕ Close", key="modal_close", use_container_width=True, help="Close modal (Esc key)"):
+            st.session_state.selected_movie = None
             st.rerun()
     
     with col3:
@@ -1139,13 +1144,6 @@ def render_movie_modal():
             total_movies = len(st.session_state.recommendations)
             new_idx = current_idx + 1 if current_idx < total_movies - 1 else 0
             st.session_state.selected_movie = new_idx
-            st.rerun()
-    
-    # Close button centered below
-    col_spacer1, col_close, col_spacer2 = st.columns([4, 2, 4])
-    with col_close:
-        if st.button("✕ Close", key="modal_close", use_container_width=True, help="Close modal (Esc key)"):
-            st.session_state.selected_movie = None
             st.rerun()
     
     # Compact divider
