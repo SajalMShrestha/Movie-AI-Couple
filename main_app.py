@@ -1061,31 +1061,6 @@ def render_movie_modal():
     
     movie_title, score, explanation = st.session_state.recommendations[movie_idx]
     
-    # Add keyboard navigation JavaScript
-    st.markdown("""
-    <script>
-    document.addEventListener('keydown', function(event) {
-        if (event.key === 'Escape') {
-            window.parent.postMessage({type: 'closeModal'}, '*');
-        } else if (event.key === 'ArrowLeft') {
-            window.parent.postMessage({type: 'prevMovie'}, '*');
-        } else if (event.key === 'ArrowRight') {
-            window.parent.postMessage({type: 'nextMovie'}, '*');
-        }
-    });
-    
-    window.addEventListener('message', function(event) {
-        if (event.data.type === 'closeModal') {
-            // Trigger close
-        } else if (event.data.type === 'prevMovie') {
-            // Trigger previous
-        } else if (event.data.type === 'nextMovie') {
-            // Trigger next
-        }
-    });
-    </script>
-    """, unsafe_allow_html=True)
-    
     # Compact styling
     st.markdown("""
     <style>
@@ -1096,28 +1071,6 @@ def render_movie_modal():
     </style>
     """, unsafe_allow_html=True)
     
-    # Check for keyboard navigation via URL params (simple implementation)
-    query_params = st.query_params
-    if 'nav' in query_params:
-        nav_action = query_params['nav']
-        current_idx = st.session_state.selected_movie
-        total_movies = len(st.session_state.recommendations)
-        
-        if nav_action == 'prev':
-            new_idx = current_idx - 1 if current_idx > 0 else total_movies - 1
-            st.session_state.selected_movie = new_idx
-            del st.query_params['nav']
-            st.rerun()
-        elif nav_action == 'next':
-            new_idx = current_idx + 1 if current_idx < total_movies - 1 else 0
-            st.session_state.selected_movie = new_idx
-            del st.query_params['nav']
-            st.rerun()
-        elif nav_action == 'close':
-            st.session_state.selected_movie = None
-            del st.query_params['nav']
-            st.rerun()
-    
     # Movie title on top (centered)
     st.markdown(f"<h3 style='text-align: center; color: #e50914; margin: 0; margin-bottom: 1rem;'>Movie {movie_idx + 1} of {len(st.session_state.recommendations)}</h3>", 
                unsafe_allow_html=True)
@@ -1126,7 +1079,7 @@ def render_movie_modal():
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("\u25C0 Previous", key="modal_prev", use_container_width=True, help="Previous movie (← key)"):
+        if st.button("\u25C0 Previous", key="modal_prev", use_container_width=True, help="Previous movie"):
             current_idx = st.session_state.selected_movie
             total_movies = len(st.session_state.recommendations)
             new_idx = current_idx - 1 if current_idx > 0 else total_movies - 1
@@ -1134,12 +1087,12 @@ def render_movie_modal():
             st.rerun()
     
     with col2:
-        if st.button("✕ Close", key="modal_close", use_container_width=True, help="Close modal (Esc key)"):
+        if st.button("✕ Close", key="modal_close", use_container_width=True, help="Close modal"):
             st.session_state.selected_movie = None
             st.rerun()
     
     with col3:
-        if st.button("Next \u25B6", key="modal_next", use_container_width=True, help="Next movie (→ key)"):
+        if st.button("Next \u25B6", key="modal_next", use_container_width=True, help="Next movie"):
             current_idx = st.session_state.selected_movie
             total_movies = len(st.session_state.recommendations)
             new_idx = current_idx + 1 if current_idx < total_movies - 1 else 0
