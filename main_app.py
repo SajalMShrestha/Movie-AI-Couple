@@ -537,11 +537,14 @@ def inject_custom_css():
         background: linear-gradient(45deg, #f0f0f0, #e0e0e0);
         animation: pulse 1.5s ease-in-out infinite;
         border-radius: 8px;
-        padding: 1rem;
+        padding: 0.5rem;
         text-align: center;
-        margin: 0.5rem 0;
+        margin: 0.25rem 0;
         font-weight: bold;
         color: #555;
+        white-space: nowrap;
+        overflow: hidden;
+        font-size: 0.8rem;
     }
     
     @keyframes pulse {
@@ -782,6 +785,10 @@ def replace_movie_with_alternative(movie_index):
         # Clear any existing feedback for this slot
         if movie_index in st.session_state.feedback_given:
             del st.session_state.feedback_given[movie_index]
+        
+        # CLEAR WATCHED STATUS FOR NEW MOVIE
+        if movie_index in st.session_state.watched_movies:
+            del st.session_state.watched_movies[movie_index]
         
         return True
     
