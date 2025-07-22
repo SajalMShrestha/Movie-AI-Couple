@@ -869,8 +869,8 @@ def render_movie_carousel():
                     if st.button("✅", key=f"watched_{movie_idx}_{replacement_count}", 
                                type=button_type, help="Already watched"):
                         if not is_watched:  # Only process if not already marked as watched
-                            # Show "Finding alternative..." message
-                            with st.spinner("🔍 Finding alternative..."):
+                            # Show shorter spinner message
+                            with st.spinner("🔍 Loading..."):
                                 handle_already_watched(movie_idx, movie_title)
                                 
                                 # Find and apply replacement
@@ -964,8 +964,8 @@ def render_movie_details(movie_index):
         if st.button("✅ Already Watched", key=f"large_watched_{movie_index}_{replacement_count}",
                     type="primary" if is_watched else "secondary"):
             if not is_watched:  # Only process if not already marked as watched
-                # Show "Finding alternative..." message
-                with st.spinner("🔍 Finding alternative..."):
+                # Show shorter spinner message
+                with st.spinner("🔍 Loading..."):
                     handle_already_watched(movie_index, movie_title)
                     
                     # Find and apply replacement
