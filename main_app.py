@@ -871,24 +871,24 @@ def render_movie_carousel():
             is_watched = movie_idx in st.session_state.watched_movies
             replacement_count = st.session_state.replacement_count.get(movie_idx, 0)
             
-            with cols[col_idx]:
+                        with cols[col_idx]:
                 # Normal poster display
                 poster_url = get_movie_poster_url(movie_title)
-                    
-                    if poster_url:
-                        st.image(poster_url, use_container_width=True)
-                    else:
-                        st.markdown(
-                            f'<div style="background-color: #ddd; height: 300px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: #666;">🎬<br>No Poster</div>',
-                            unsafe_allow_html=True
-                        )
-                    
-                    # View Details button
-                    if st.button("🎬 View Details", 
-                               key=f"details_{movie_idx}_{replacement_count}",
-                               use_container_width=True):
-                        st.session_state.selected_movie = movie_idx
-                        st.rerun()
+                
+                if poster_url:
+                    st.image(poster_url, use_container_width=True)
+                else:
+                    st.markdown(
+                        f'<div style="background-color: #ddd; height: 300px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: #666;">🎬<br>No Poster</div>',
+                        unsafe_allow_html=True
+                    )
+                
+                # View Details button
+                if st.button("🎬 View Details", 
+                           key=f"details_{movie_idx}_{replacement_count}",
+                           use_container_width=True):
+                    st.session_state.selected_movie = movie_idx
+                    st.rerun()
                 
                 # Movie title - SIMPLIFIED (no indicators)
                 st.markdown(f"**{movie_title}**")
