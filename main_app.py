@@ -911,28 +911,23 @@ def render_movie_carousel():
                         st.rerun()
                 
                 else:
-                    # Clickable poster display
+                    # Normal poster display
                     poster_url = get_movie_poster_url(movie_title)
                     
                     if poster_url:
-                        # Show poster image normally
                         st.image(poster_url, use_container_width=True)
-                        
-                        # Add clickable button below poster
-                        if st.button("🎬 View Details", 
-                                   key=f"poster_click_{movie_idx}_{replacement_count}",
-                                   help="Click to view movie details",
-                                   use_container_width=True):
-                            st.session_state.selected_movie = movie_idx
-                            st.rerun()
                     else:
-                        # Clickable no-poster placeholder
-                        if st.button("🎬 No Poster\n(Click for details)", 
-                                   key=f"no_poster_click_{movie_idx}_{replacement_count}",
-                                   help="Click to view details",
-                                   use_container_width=True):
-                            st.session_state.selected_movie = movie_idx
-                            st.rerun()
+                        st.markdown(
+                            f'<div style="background-color: #ddd; height: 300px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: #666;">🎬<br>No Poster</div>',
+                            unsafe_allow_html=True
+                        )
+                    
+                    # View Details button
+                    if st.button("🎬 View Details", 
+                               key=f"details_{movie_idx}_{replacement_count}",
+                               use_container_width=True):
+                        st.session_state.selected_movie = movie_idx
+                        st.rerun()
                 
                 # Movie title - SIMPLIFIED (no indicators)
                 st.markdown(f"**{movie_title}**")
