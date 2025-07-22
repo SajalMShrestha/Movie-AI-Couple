@@ -1118,8 +1118,12 @@ def render_movie_modal():
             del st.query_params['nav']
             st.rerun()
     
-    # Modal Header with navigation - ALL ON SAME ROW
-    col1, col2, col3, col4, col5 = st.columns([2, 2, 3, 2, 2])
+    # Movie title on top (centered)
+    st.markdown(f"<h3 style='text-align: center; color: #e50914; margin: 0; margin-bottom: 1rem;'>Movie {movie_idx + 1} of {len(st.session_state.recommendations)}</h3>", 
+               unsafe_allow_html=True)
+    
+    # Navigation buttons below (3 equal columns)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         if st.button("\u25C0 Previous", key="modal_prev", use_container_width=True, help="Previous movie (← key)"):
@@ -1135,10 +1139,6 @@ def render_movie_modal():
             st.rerun()
     
     with col3:
-        st.markdown(f"<h3 style='text-align: center; color: #e50914; margin: 0;'>Movie {movie_idx + 1} of {len(st.session_state.recommendations)}</h3>", 
-                   unsafe_allow_html=True)
-    
-    with col5:
         if st.button("Next \u25B6", key="modal_next", use_container_width=True, help="Next movie (→ key)"):
             current_idx = st.session_state.selected_movie
             total_movies = len(st.session_state.recommendations)
