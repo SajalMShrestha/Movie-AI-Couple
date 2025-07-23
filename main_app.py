@@ -922,13 +922,14 @@ def render_movie_carousel():
                     if st.button("✅", key=f"watched_{movie_idx}_{replacement_count}", 
                                type=button_type, help="Already watched"):
                         if not is_watched:  # Only process if not already marked as watched
-                            # Immediately process without separate loading state
-                            handle_already_watched(movie_idx, movie_title)
-                            
-                            if replace_movie_with_alternative(movie_idx):
-                                st.success("✨ Found you an alternative!")
-                            else:
-                                st.info("Keeping current movie - no more alternatives available.")
+                            # Show loading indicator
+                            with st.spinner("🔄 Loading..."):
+                                handle_already_watched(movie_idx, movie_title)
+                                
+                                if replace_movie_with_alternative(movie_idx):
+                                    st.success("✨ Found you an alternative!")
+                                else:
+                                    st.info("Keeping current movie - no more alternatives available.")
                             
                             st.rerun()
                 
@@ -1012,8 +1013,15 @@ def render_movie_details(movie_index):
         if st.button("✅ Already Watched", key=f"large_watched_{movie_index}_{replacement_count}",
                     type="primary" if is_watched else "secondary"):
             if not is_watched:  # Only process if not already marked as watched
-                # Set loading state
-                st.session_state[f"loading_{movie_index}"] = True
+                # Show loading indicator
+                with st.spinner("🔄 Loading..."):
+                    handle_already_watched(movie_index, movie_title)
+                    
+                    if replace_movie_with_alternative(movie_index):
+                        st.success("✨ Found you an alternative!")
+                    else:
+                        st.info("Keeping current movie - no more alternatives available.")
+                
                 st.rerun()
     
     st.markdown('</div></div>', unsafe_allow_html=True)
@@ -1059,7 +1067,16 @@ def render_movie_modal():
     if movie_idx >= len(st.session_state.recommendations):
         return
     
-    movie_title, score, explanation = st.session_state.recommendations[movie_idx]
+    # Get current movie (might be replacement)
+    current_movie = st.session_state.current_displayed_movies.get(movie_idx)
+    if current_movie:
+        movie_title, score, explanation = current_movie
+    else:
+        # Fallback to original recommendations if not in current_displayed_movies
+        movie_title, score, explanation = st.session_state.recommendations[movie_idx]
+    
+    # Get replacement count for this movie
+    replacement_count = st.session_state.replacement_count.get(movie_idx, 0)
     
     # Compact styling
     st.markdown("""
@@ -1079,7 +1096,7 @@ def render_movie_modal():
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("\u25C0 Previous", key="modal_prev", use_container_width=True, help="Previous movie"):
+        if st.button("\u25C0 Previous", key=f"modal_prev_{movie_idx}_{replacement_count}", use_container_width=True, help="Previous movie"):
             current_idx = st.session_state.selected_movie
             total_movies = len(st.session_state.recommendations)
             new_idx = current_idx - 1 if current_idx > 0 else total_movies - 1
@@ -1087,12 +1104,12 @@ def render_movie_modal():
             st.rerun()
     
     with col2:
-        if st.button("✕ Close", key="modal_close", use_container_width=True, help="Close modal"):
+        if st.button("✕ Close", key=f"modal_close_{movie_idx}_{replacement_count}", use_container_width=True, help="Close modal"):
             st.session_state.selected_movie = None
             st.rerun()
     
     with col3:
-        if st.button("Next \u25B6", key="modal_next", use_container_width=True, help="Next movie"):
+        if st.button("Next \u25B6", key=f"modal_next_{movie_idx}_{replacement_count}", use_container_width=True, help="Next movie"):
             current_idx = st.session_state.selected_movie
             total_movies = len(st.session_state.recommendations)
             new_idx = current_idx + 1 if current_idx < total_movies - 1 else 0
@@ -1190,8 +1207,8 @@ def render_movie_modal():
             if st.button("✅ Watched", key=f"modal_watched_{movie_idx}_{replacement_count}", 
                         type=button_type, use_container_width=True):
                 if not is_watched:  # Only process if not already marked as watched
-                    # Show "Finding alternative..." message
-                    with st.spinner("🔍 Finding alternative..."):
+                    # Show loading indicator
+                    with st.spinner("🔄 Loading..."):
                         handle_already_watched(movie_idx, movie_title)
                         
                         # Find and apply replacement
