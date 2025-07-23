@@ -11,7 +11,7 @@ import os
 # COUPLE CONFIGURATION
 # =============================================================================
 
-COUPLE_NAME = "Sajal + Sneha"
+COUPLE_NAME = "Sneha + Sajal"
 PERSON1_NAME = "Sajal"
 PERSON1_MOVIES = [
     "The Bourne Identity",
