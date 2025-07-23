@@ -11,23 +11,23 @@ import os
 # COUPLE CONFIGURATION
 # =============================================================================
 
-COUPLE_NAME = "Neha + Prasanna"
-PERSON1_NAME = "Prasanna"
+COUPLE_NAME = "Dilasha + Shreish"
+PERSON1_NAME = "Dilasha"
 PERSON1_MOVIES = [
-    "10 Things I Hate About You",
     "Shutter Island",
-    "Guardians of the Galaxy",
-    "The Grand Budapest Hotel",
-    "Thor: Love and Thunder"
+    "The Shawshank Redemption",
+    "Titanic",
+    "Harry Potter and the Philosopher's Stone",
+    "Crazy, Stupid, Love."
 ]
 
-PERSON2_NAME = "Neha"
+PERSON2_NAME = "Shreish"
 PERSON2_MOVIES = [
-    "The Notebook",
-    "Knives Out",
-    "Zindagi Na Milegi Dobara",
-    "Amélie",
-    "The Invisible Guest"
+    "Home Alone 2: Lost in New York",
+    "The Shawshank Redemption",
+    "Harry Potter and the Prisoner of Azkaban",
+    "Harry Potter and the Deathly Hallows: Part 2",
+    "Elf"
 ]
 
 # =============================================================================
