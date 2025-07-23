@@ -1239,7 +1239,7 @@ def main():
     # Title
     st.markdown(f'<h1 style="text-align: center; color: #e50914; font-size: 2.5rem; margin-bottom: 2rem;">🎬 {COUPLE_NAME}</h1>', 
                 unsafe_allow_html=True)
-    st.markdown('<p style="text-align: center; font-size: 1.1rem; color: #666; margin-bottom: 2rem;">Help us pick our next movie night! Rate these recommendations:</p>', 
+    st.markdown('<p style="text-align: center; font-size: 1.1rem; color: #666; margin-bottom: 2rem;">Help us pick your next movie night! Rate these recommendations:</p>', 
                 unsafe_allow_html=True)
     
     # Load recommendations if not already loaded
